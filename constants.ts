@@ -1,6 +1,17 @@
+// --- GOOGLE FIREBASE CLOUD DATABASE CONFIG ---
+// Debes obtener estas credenciales en: https://console.firebase.google.com/
+// Crea un proyecto, agrega una "Web App" y copia la configuración aquí.
+export const FIREBASE_CONFIG = {
+  apiKey: "TU_API_KEY_AQUI", // Reemplazar con datos reales
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+
 export const APP_CONFIG = {
-  SPREADSHEET_ID: '13rQdIhzb-Ve9GAClQwopVtS9u2CpGTj2aUy528a7YSw',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzr2zmg-0XDRZEPbO9jYLnicB-rGRjjfnWqRR9eY2-ZCB5SCW1ZDQf5QYNRiO8MalRbvw/exec',
+  // Eliminada la URL de Apps Script (Google Sheets)
   GITHUB_REPO_BASE: 'https://raw.githack.com/soporteaiwis-lab/ada/main',
 };
 

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { User, SyllabusStructure } from '../types';
-import { DIAS_SEMANA } from '../constants';
-import { Save, UserPlus, Trash2, Database, Video, BookOpen, Cpu, ShieldCheck, RefreshCw, Smartphone, Monitor } from 'lucide-react';
+import { DIAS_SEMANA, FIREBASE_CONFIG } from '../constants';
+import { getCloudStatus } from '../services/dataService';
+import { Save, UserPlus, Trash2, Database, Video, BookOpen, Cpu, ShieldCheck, RefreshCw, Smartphone, Monitor, AlertTriangle } from 'lucide-react';
 
 interface AdminDashboardProps {
     users: User[];
@@ -16,6 +17,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
     const [newUserName, setNewUserName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     
+    const isCloudActive = getCloudStatus();
+
     // --- USER MANAGEMENT ---
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,6 +70,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
 
     return (
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
+            {/* ALERT IF NO FIREBASE */}
+            {!isCloudActive && (
+                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
+                    <AlertTriangle className="text-amber-500 shrink-0 mt-1" />
+                    <div>
+                        <h3 className="font-bold text-amber-500">Base de Datos NO Configurada</h3>
+                        <p className="text-sm text-slate-300 mb-2">
+                            Para que el portal funcione en la nube real de Google (no local, no Sheets), debes configurar Firebase.
+                        </p>
+                        <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono bg-black/30 p-2 rounded">
+                            <li>Ve a <a href="https://console.firebase.google.com" target="_blank" className="text-blue-400 underline">console.firebase.google.com</a></li>
+                            <li>Crea un proyecto nuevo (gratis)</li>
+                            <li>Entra a "Firestore Database" y crea una base de datos</li>
+                            <li>Ve a Configuración del Proyecto -{'>'} General -{'>'} Web App</li>
+                            <li>Copia las credenciales y pégalas en el archivo <code>constants.ts</code></li>
+                        </ol>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-slate-800 border border-violet-500/30 rounded-2xl overflow-hidden shadow-2xl">
                 {/* Header */}
                 <div className="bg-slate-900/90 p-4 md:p-6 border-b border-violet-500/20 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -75,8 +98,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                             <ShieldCheck className="text-violet-400" /> Panel Master Root
                         </h2>
                         <div className="flex items-center gap-2 text-slate-400 text-xs mt-1">
-                            <RefreshCw size={12} className={isSaving ? "animate-spin text-emerald-400" : ""} />
-                            {isSaving ? "Sincronizando con Google Cloud..." : "Base de Datos Conectada"}
+                            {isCloudActive ? (
+                                <>
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className="text-emerald-400 font-bold">Google Firestore Conectado</span>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                    <span className="text-red-400 font-bold">Sin Conexión Cloud</span>
+                                </>
+                            )}
+                            {isSaving && <span className="text-slate-500 ml-2 animate-pulse">Guardando...</span>}
                         </div>
                     </div>
                     
@@ -110,7 +143,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                     <label className="block text-xs text-slate-400 mb-1">Nombre Completo</label>
                                     <input value={newUserName} onChange={e => setNewUserName(e.target.value)} className="w-full bg-slate-900 border border-white/20 rounded p-3 text-sm" placeholder="Juan Pérez" />
                                 </div>
-                                <button type="submit" disabled={isSaving} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-3 rounded-lg transition-colors flex items-center justify-center gap-2 font-bold text-sm">
+                                <button type="submit" disabled={isSaving || !isCloudActive} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-3 rounded-lg transition-colors flex items-center justify-center gap-2 font-bold text-sm">
                                     <Save size={18} /> {isSaving ? 'Guardando...' : 'Agregar Usuario'}
                                 </button>
                             </form>
@@ -136,7 +169,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                         value={user.rol} 
                                                         onChange={(e) => handleRoleChange(user.email, e.target.value)}
                                                         className="bg-transparent border border-white/20 rounded px-2 py-1 text-xs focus:bg-slate-800 w-full"
-                                                        disabled={user.email === 'AIWIS'}
+                                                        disabled={user.email === 'AIWIS' || !isCloudActive}
                                                     >
                                                         <option value="Usuario">Usuario</option>
                                                         <option value="Mentor AIWIS">Mentor</option>
@@ -145,7 +178,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                 </td>
                                                 <td className="p-3 text-right">
                                                     {user.email !== 'AIWIS' && (
-                                                        <button onClick={() => handleDeleteUser(user.email)} className="text-red-400 hover:text-red-300 p-1">
+                                                        <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="text-red-400 hover:text-red-300 p-1 disabled:opacity-30">
                                                             <Trash2 size={16} />
                                                         </button>
                                                     )}
@@ -166,7 +199,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                 <div className="text-xs text-slate-400">{user.email}</div>
                                             </div>
                                             {user.email !== 'AIWIS' && (
-                                                <button onClick={() => handleDeleteUser(user.email)} className="bg-red-500/20 text-red-300 p-2 rounded-lg">
+                                                <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="bg-red-500/20 text-red-300 p-2 rounded-lg disabled:opacity-30">
                                                     <Trash2 size={16} />
                                                 </button>
                                             )}
@@ -177,7 +210,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                 value={user.rol} 
                                                 onChange={(e) => handleRoleChange(user.email, e.target.value)}
                                                 className="w-full bg-slate-950 border border-white/20 rounded p-2 text-sm text-white"
-                                                disabled={user.email === 'AIWIS'}
+                                                disabled={user.email === 'AIWIS' || !isCloudActive}
                                             >
                                                 <option value="Usuario">Usuario</option>
                                                 <option value="Mentor AIWIS">Mentor</option>
@@ -196,7 +229,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                             <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row items-center gap-2 text-center md:text-left">
                                 <Monitor size={20} />
                                 <div>
-                                    <span className="font-bold">Modo Edición en la Nube:</span> Los cambios se replican en Google Sheets.
+                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo (Firestore)' : 'Inactivo (Configurar Firebase)'}
                                 </div>
                             </div>
 
@@ -222,12 +255,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                             value={dayData.title}
                                                             onChange={(e) => handleContentChange(week, day, 'title', e.target.value)}
                                                             className="w-full bg-transparent border-b border-white/10 focus:border-blue-500 outline-none text-white font-medium pb-1 transition-all"
+                                                            disabled={!isCloudActive}
                                                         />
                                                         <label className="md:hidden text-xs text-slate-500 mt-2 block">Descripción</label>
                                                         <textarea 
                                                             value={dayData.desc}
                                                             onChange={(e) => handleContentChange(week, day, 'desc', e.target.value)}
                                                             className="w-full bg-slate-900/50 border border-white/10 rounded p-2 text-xs text-slate-400 h-20 focus:border-blue-500 outline-none transition-all"
+                                                            disabled={!isCloudActive}
                                                         />
                                                     </div>
                                                     <div className="md:col-span-7">
@@ -239,6 +274,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                                 onChange={(e) => handleContentChange(week, day, 'videoUrl', e.target.value)}
                                                                 className="flex-1 bg-transparent outline-none text-xs text-slate-300 placeholder:text-slate-600 w-full"
                                                                 placeholder="Pegar URL de YouTube..."
+                                                                disabled={!isCloudActive}
                                                             />
                                                         </div>
                                                     </div>
@@ -256,18 +292,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                         <div className="space-y-6">
                             <div className="bg-gradient-to-r from-emerald-900/40 to-slate-900 border border-emerald-500/30 rounded-xl p-6">
                                 <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                                    <Cpu className="text-emerald-400" /> Gemini Database Architect
+                                    <Cpu className="text-emerald-400" /> Firebase Cloud Status
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    Conexión activa con Google Apps Script. 
+                                    Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO</span>}
                                 </p>
+                                <div className="p-4 bg-black/50 rounded-lg text-xs font-mono break-all text-slate-500">
+                                    Project ID: {FIREBASE_CONFIG.projectId}
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-6">
                                 <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
-                                    <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios (JSON)</h4>
+                                    <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios (JSON Cloud)</h4>
                                     <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
-                                        {JSON.stringify(users, null, 2)}
+                                        {isCloudActive ? JSON.stringify(users, null, 2) : "Conecta a la nube para ver datos reales."}
                                     </div>
                                 </div>
                             </div>

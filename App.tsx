@@ -37,8 +37,7 @@ const App = () => {
   // Initial Data Load
   useEffect(() => {
     const init = async () => {
-      // Load Database from Cloud (Google Sheets via Apps Script)
-      // This waits for the fetch to complete to ensure data truth
+      // Load Database from Cloud (Firebase)
       const [fetchedUsers, fetchedSyllabus] = await Promise.all([
           getStoredUsers(),
           getStoredSyllabus()
@@ -55,16 +54,17 @@ const App = () => {
       });
       setVideoMap(vMap);
 
-      // Check local storage for session
+      // Check local storage for session (Only session state, data is fresh from cloud)
       const savedUser = localStorage.getItem('ada_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
         const freshUser = fetchedUsers.find(u => u.email === parsed.email) || parsed;
         setCurrentUser(freshUser);
         
-        const savedProgress = loadLocalProgress(parsed.email);
+        const savedProgress = await loadLocalProgress(parsed.email);
         setProgressMap(savedProgress);
         
+        // Ideas are local for now unless we add cloud collection for them, keeping local to keep it simple
         const savedIdeas = localStorage.getItem(`ada_ideas_${parsed.email}`);
         if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
       }
@@ -74,7 +74,7 @@ const App = () => {
   }, []);
 
   // Handlers
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     
@@ -92,7 +92,7 @@ const App = () => {
       localStorage.setItem('ada_user', JSON.stringify(user));
       
       // Load progress
-      const savedProgress = loadLocalProgress(user.email);
+      const savedProgress = await loadLocalProgress(user.email);
       setProgressMap(savedProgress);
       
       const savedIdeas = localStorage.getItem(`ada_ideas_${user.email}`);
@@ -120,7 +120,7 @@ const App = () => {
     setCurrentPage('inicio');
   };
 
-  // ADMIN UPDATES - Now calls Cloud functions
+  // ADMIN UPDATES - Calls Firebase Cloud functions
   const handleUpdateUsers = async (newUsers: User[]) => {
       setUsers(newUsers);
       await saveUsersToCloud(newUsers); 
@@ -211,8 +211,8 @@ const App = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white flex-col gap-4">
         <Loader2 className="animate-spin w-10 h-10 text-blue-500" /> 
         <div className="text-center">
-            <h2 className="text-xl font-bold">Conectando con Google Cloud...</h2>
-            <p className="text-slate-400 text-sm">Sincronizando Base de Datos Maestra</p>
+            <h2 className="text-xl font-bold">Conectando con Google Firestore...</h2>
+            <p className="text-slate-400 text-sm">Cargando base de datos en tiempo real</p>
         </div>
       </div>
     );

@@ -1,5 +1,25 @@
 import { User, SyllabusStructure } from '../types';
-import { APP_CONFIG, SYLLABUS_DATA as INITIAL_SYLLABUS } from '../constants';
+import { FIREBASE_CONFIG, SYLLABUS_DATA as INITIAL_SYLLABUS } from '../constants';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+
+// --- INITIALIZATION ---
+let db: any = null;
+let isFirebaseReady = false;
+
+// Attempt to initialize Firebase
+try {
+    if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "TU_API_KEY_AQUI") {
+        const app = initializeApp(FIREBASE_CONFIG);
+        db = getFirestore(app);
+        isFirebaseReady = true;
+        console.log("🔥 Firebase Firestore Conectado Exitosamente");
+    } else {
+        console.warn("⚠️ Firebase no configurado. Revisa constants.ts");
+    }
+} catch (e) {
+    console.error("Error inicializando Firebase:", e);
+}
 
 // --- UTILS ---
 export const extractVideoId = (url: string | undefined): string | undefined => {
@@ -9,7 +29,7 @@ export const extractVideoId = (url: string | undefined): string | undefined => {
   return (match && match[2].length === 11) ? match[2] : undefined;
 };
 
-// --- MASTER USER (Always exists in memory for recovery) ---
+// --- MASTER USER DEFAULT ---
 const MASTER_USER: User = {
     email: 'AIWIS',
     password: '1234',
@@ -19,136 +39,138 @@ const MASTER_USER: User = {
     progreso: { porcentaje: 100, completados: 999, pendientes: 0 }
 };
 
-// --- CLOUD SYNC SERVICES ---
+// --- CLOUD OPERATIONS (FIRESTORE) ---
+
+export const getCloudStatus = () => isFirebaseReady;
 
 /**
- * Fetch all data (Users and Syllabus) from the Google Cloud (Apps Script)
+ * Fetch Users from Firestore 'ada_portal/users'
  */
-export const fetchCloudData = async () => {
+export const getStoredUsers = async (): Promise<User[]> => {
+    if (!isFirebaseReady || !db) {
+        // Fallback TEMPORAL en memoria si no hay nube configurada
+        return [MASTER_USER];
+    }
+
     try {
-        // We add a timestamp to prevent browser caching of the GET request
-        const response = await fetch(`${APP_CONFIG.APPS_SCRIPT_URL}?action=getData&t=${Date.now()}`);
-        if (!response.ok) throw new Error("Error conectando a Google Cloud");
-        
-        const data = await response.json();
-        return {
-            users: data.users || [],
-            syllabus: data.syllabus || null
-        };
+        const docRef = doc(db, "ada_portal", "users");
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            let users = data.list as User[];
+            
+            // Ensure Master Exists
+            if (!users.find(u => u.email === 'AIWIS')) {
+                users.unshift(MASTER_USER);
+            }
+            return users;
+        } else {
+            // First run: Create the doc
+            await setDoc(docRef, { list: [MASTER_USER] });
+            return [MASTER_USER];
+        }
     } catch (error) {
-        console.error("Cloud Fetch Error:", error);
-        return { users: [], syllabus: null };
+        console.error("Error leyendo usuarios de Firestore:", error);
+        return [MASTER_USER];
     }
 };
 
 /**
- * Save Users List to Google Cloud
+ * Fetch Syllabus from Firestore 'ada_portal/syllabus'
+ */
+export const getStoredSyllabus = async (): Promise<SyllabusStructure> => {
+    if (!isFirebaseReady || !db) {
+        return INITIAL_SYLLABUS;
+    }
+
+    try {
+        const docRef = doc(db, "ada_portal", "syllabus");
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            return docSnap.data().data as SyllabusStructure;
+        } else {
+            // First run: Create the doc with initial data
+            await setDoc(docRef, { data: INITIAL_SYLLABUS });
+            return INITIAL_SYLLABUS;
+        }
+    } catch (error) {
+        console.error("Error leyendo syllabus de Firestore:", error);
+        return INITIAL_SYLLABUS;
+    }
+};
+
+/**
+ * Save Users to Cloud
  */
 export const saveUsersToCloud = async (users: User[]): Promise<boolean> => {
+    if (!isFirebaseReady || !db) return false;
+
     try {
-        await fetch(APP_CONFIG.APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Standard for GAS Web Apps
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveUsers',
-                data: users
-            })
-        });
-        // Since no-cors returns opaque response, we assume success if no network error
-        // Update local cache for instant feedback
-        localStorage.setItem('ada_db_users', JSON.stringify(users));
+        const docRef = doc(db, "ada_portal", "users");
+        await setDoc(docRef, { list: users }, { merge: true });
+        console.log("Usuarios guardados en nube");
         return true;
     } catch (error) {
-        console.error("Cloud Save Error (Users):", error);
+        console.error("Error guardando usuarios:", error);
         return false;
     }
 };
 
 /**
- * Save Syllabus Structure to Google Cloud
+ * Save Syllabus to Cloud
  */
 export const saveSyllabusToCloud = async (syllabus: SyllabusStructure): Promise<boolean> => {
+    if (!isFirebaseReady || !db) return false;
+
     try {
-        await fetch(APP_CONFIG.APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveSyllabus',
-                data: syllabus
-            })
-        });
-        localStorage.setItem('ada_db_syllabus', JSON.stringify(syllabus));
+        const docRef = doc(db, "ada_portal", "syllabus");
+        await setDoc(docRef, { data: syllabus }, { merge: true });
+        console.log("Syllabus guardado en nube");
         return true;
     } catch (error) {
-        console.error("Cloud Save Error (Syllabus):", error);
+        console.error("Error guardando syllabus:", error);
         return false;
     }
 };
 
-// --- DATA ACCESSORS ---
-
-export const getStoredUsers = async (): Promise<User[]> => {
-    // 1. Try Cloud First
-    const cloudData = await fetchCloudData();
-    
-    // 2. If Cloud returns valid users, use them
-    if (cloudData.users && cloudData.users.length > 0) {
-        // Ensure Master is always present even if DB is wiped
-        const hasMaster = cloudData.users.find((u: User) => u.email === 'AIWIS');
-        if (!hasMaster) cloudData.users.unshift(MASTER_USER);
-        
-        localStorage.setItem('ada_db_users', JSON.stringify(cloudData.users));
-        return cloudData.users;
-    }
-
-    // 3. Fallback to LocalStorage
-    const stored = localStorage.getItem('ada_db_users');
-    if (stored) return JSON.parse(stored);
-
-    // 4. Fallback to Initial Hardcoded
-    return [MASTER_USER]; 
-};
-
-export const getStoredSyllabus = async (): Promise<SyllabusStructure> => {
-    const cloudData = await fetchCloudData();
-    
-    if (cloudData.syllabus) {
-        localStorage.setItem('ada_db_syllabus', JSON.stringify(cloudData.syllabus));
-        return cloudData.syllabus;
-    }
-
-    const stored = localStorage.getItem('ada_db_syllabus');
-    return stored ? JSON.parse(stored) : INITIAL_SYLLABUS;
-};
-
-
-// --- HELPERS ---
-
+/**
+ * Sync Progress to Cloud (Firestore: ada_portal/progress_{email})
+ */
 export const syncProgress = async (user: User, progressMap: Record<string, boolean>) => {
-    // 1. Save locally immediately
-    const storageKey = `ada_progress_${user.email}`;
-    localStorage.setItem(storageKey, JSON.stringify(progressMap));
+    // We update localstorage JUST for session persistence, but truth is cloud
+    localStorage.setItem(`ada_progress_${user.email}`, JSON.stringify(progressMap));
 
-    // 2. Send to Cloud
+    if (!isFirebaseReady || !db) return;
+
     try {
-        await fetch(APP_CONFIG.APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveProgress',
-                email: user.email,
-                progress: progressMap
-            })
-        });
-    } catch (e) {
-        console.warn("Background sync failed", e);
+        const docRef = doc(db, "ada_portal", `progress_${user.email.replace(/\./g, '_')}`); // Clean email for ID
+        await setDoc(docRef, { map: progressMap }, { merge: true });
+    } catch (error) {
+        console.error("Error sincronizando progreso:", error);
     }
 };
 
-export const loadLocalProgress = (email: string): Record<string, boolean> => {
+/**
+ * Load Progress from Cloud
+ */
+export const loadLocalProgress = async (email: string): Promise<Record<string, boolean>> => {
+    // Try Cloud First
+    if (isFirebaseReady && db) {
+        try {
+             const docRef = doc(db, "ada_portal", `progress_${email.replace(/\./g, '_')}`);
+             const docSnap = await getDoc(docRef);
+             if (docSnap.exists()) {
+                 const data = docSnap.data();
+                 return data.map || {};
+             }
+        } catch (e) {
+            console.warn("No se pudo leer progreso nube, intentando local...");
+        }
+    }
+
+    // Fallback Local (Session only)
     const saved = localStorage.getItem(`ada_progress_${email}`);
     return saved ? JSON.parse(saved) : {};
 };
