@@ -7,33 +7,36 @@ import { getFirestore, doc, getDoc, setDoc, Firestore } from 'firebase/firestore
 // --- INITIALIZATION ---
 let db: Firestore | null = null;
 let isFirebaseReady = false;
-// Tipos de error para UI: 'none' | 'permission' | 'missing_db' | 'blocked_key'
 let dbErrorType: string = 'none';
 
 try {
-    console.log("🔥 Inicializando Firebase...");
-    // Check if key is placeholder
-    if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("TU_API_KEY")) {
-        console.warn("⚠️ API Key es un marcador de posición. Firebase no conectará.");
-        dbErrorType = 'blocked_key';
-    } else {
-        const app = initializeApp(FIREBASE_CONFIG);
-        
-        // Intento 1: Conectar a la DB nombrada 'aiwis-bd-ia-portal'
-        try {
-            db = getFirestore(app, "aiwis-bd-ia-portal");
-            isFirebaseReady = true;
-            console.log("✅ Instancia Firestore creada: aiwis-bd-ia-portal");
-        } catch (e) {
-            console.warn("⚠️ Falló conexión a DB nombrada, intentando default...", e);
-            db = getFirestore(app); // Fallback a default
-            isFirebaseReady = true;
-        }
+    console.log("🔥 Inicializando Firebase (Modular SDK)...");
+    
+    // Inicializamos App
+    // @ts-ignore
+    const app = initializeApp(FIREBASE_CONFIG);
+    
+    // Intento 1: Conectar a la DB nombrada 'aiwis-bd-ia-portal'
+    try {
+        db = getFirestore(app, "aiwis-bd-ia-portal");
+        isFirebaseReady = true;
+        console.log("✅ Instancia Firestore creada: aiwis-bd-ia-portal");
+    } catch (e) {
+        console.warn("⚠️ Falló conexión a DB nombrada, intentando default...", e);
+        // Fallback a default si la nombrada falla (versiones viejas o configuración)
+        db = getFirestore(app); 
+        isFirebaseReady = true;
     }
+
 } catch (e: any) {
     console.error("❌ Error CRÍTICO init Firebase:", e);
     isFirebaseReady = false;
-    dbErrorType = 'blocked_key';
+    // Detectar si el error es por clave inválida
+    if (e.message && (e.message.includes('API key') || e.message.includes('blocked'))) {
+        dbErrorType = 'blocked_key';
+    } else {
+        dbErrorType = 'missing_db';
+    }
 }
 
 // --- UTILS ---
@@ -97,7 +100,7 @@ function handleFirebaseError(error: any) {
     // PERMISSION DENIED (Reglas de Seguridad)
     if (code === 'permission-denied' || msg.includes('permission-denied') || msg.includes('insufficient permissions')) {
         dbErrorType = 'permission';
-        isFirebaseReady = false; // Stop trying
+        isFirebaseReady = false; 
         return;
     }
 
@@ -114,12 +117,6 @@ function handleFirebaseError(error: any) {
         isFirebaseReady = false;
         return;
     }
-
-    // OFFLINE / NETWORK
-    if (msg.includes('offline') || msg.includes('network')) {
-        // Just warning, don't disable flag permanently unless consistent
-        console.warn("Modo Offline detectado");
-    }
 }
 
 export const getStoredUsers = async (): Promise<User[]> => {
@@ -127,7 +124,6 @@ export const getStoredUsers = async (): Promise<User[]> => {
 
     try {
         const docRef = doc(db, "ada_portal", "users");
-        // Timeout corto para no bloquear la UI si hay problemas de red
         const docSnap: any = await withTimeout(getDoc(docRef), 3000);
 
         if (docSnap.exists()) {
@@ -139,10 +135,9 @@ export const getStoredUsers = async (): Promise<User[]> => {
                 users.unshift(MASTER_USER);
             }
             saveLocalUsers(users);
-            dbErrorType = 'none'; // Success!
+            dbErrorType = 'none'; 
             return users;
         } else {
-            // Document doesn't exist, try to create it
             console.log("Creando doc usuarios inicial...");
             await setDoc(docRef, { list: [MASTER_USER] });
             saveLocalUsers([MASTER_USER]);
@@ -172,7 +167,6 @@ export const getStoredModules = async (): Promise<CourseModule[]> => {
             return INITIAL_MODULES;
         }
     } catch (error: any) {
-        // Don't overwrite error type if it's already stricter (e.g. permission)
         if (dbErrorType === 'none') handleFirebaseError(error);
         return getLocalModules();
     }

@@ -1,10 +1,12 @@
 
 // --- GOOGLE FIREBASE CLOUD DATABASE CONFIG ---
-// ⚠️ CONFIGURACIÓN SEGURA DE API KEY
-// 1. Usa Variables de Entorno (.env) para no exponer tu clave en GitHub.
-// 2. Si usas Vite, usa VITE_FIREBASE_API_KEY. Si usas CRA, usa REACT_APP_FIREBASE_API_KEY.
-// 3. RESTRINGE tu API Key en Google Cloud Console a tu dominio (*.run.app, localhost).
 
+// 🔴 IMPORTANTE: PEGA TU NUEVA API KEY DENTRO DE LAS COMILLAS DE ABAJO:
+// (Asegúrate de que la clave tenga restricciones de dominio en Google Cloud Console para que no te la bloqueen)
+const MANUAL_API_KEY = "AIzaSyDSaR4mpibwg6XSkQdE8jlwOMq7WoWXKpg"; // <--- CLAVE INYECTADA
+
+// ⚠️ CONFIGURACIÓN AVANZADA (VARIABLES DE ENTORNO)
+// Si prefieres usar archivo .env, el sistema buscará ahí primero.
 const getEnvVar = (key: string, viteKey: string): string | undefined => {
   try {
     // Intenta Node/CRA (process.env)
@@ -25,8 +27,8 @@ const getEnvVar = (key: string, viteKey: string): string | undefined => {
   return undefined;
 };
 
-// Obtener clave o usar marcador de posición
-const apiKey = getEnvVar('REACT_APP_FIREBASE_API_KEY', 'VITE_FIREBASE_API_KEY') || "TU_API_KEY_NUEVA_RESTRINGIDA";
+// Lógica de selección de clave: .env > Manual > Placeholder
+const apiKey = getEnvVar('REACT_APP_FIREBASE_API_KEY', 'VITE_FIREBASE_API_KEY') || (MANUAL_API_KEY.length > 5 ? MANUAL_API_KEY : "TU_API_KEY_PENDIENTE");
 
 export const FIREBASE_CONFIG = {
   apiKey: apiKey,
@@ -41,5 +43,4 @@ export const APP_CONFIG = {
   // Configuración limpia
 };
 
-// ESTADO INICIAL VACÍO
 export const INITIAL_MODULES = [];

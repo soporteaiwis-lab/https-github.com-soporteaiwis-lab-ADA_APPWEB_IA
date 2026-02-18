@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 const getClient = () => {
@@ -10,7 +11,7 @@ const getClient = () => {
 export const askGeminiTutor = async (context: string, question: string): Promise<string> => {
     try {
         const client = getClient();
-        const model = "gemini-2.5-flash-latest"; 
+        const model = "gemini-3-flash-preview"; 
         
         const systemInstruction = `
             Eres un tutor experto en Inteligencia Artificial para el programa corporativo ADA.
@@ -25,10 +26,7 @@ export const askGeminiTutor = async (context: string, question: string): Promise
 
         const response = await client.models.generateContent({
             model: model,
-            contents: [{
-                role: 'user',
-                parts: [{ text: question }]
-            }],
+            contents: question,
             config: {
                 systemInstruction: systemInstruction,
             }
@@ -44,7 +42,7 @@ export const askGeminiTutor = async (context: string, question: string): Promise
 export const generateSmartReport = async (userName: string, progress: number, ideas: any[]): Promise<string> => {
      try {
         const client = getClient();
-        const model = "gemini-2.5-flash-latest"; 
+        const model = "gemini-3-flash-preview"; 
 
         const ideasText = ideas.map(i => `- ${i.type}: ${i.text}`).join('\n');
         
