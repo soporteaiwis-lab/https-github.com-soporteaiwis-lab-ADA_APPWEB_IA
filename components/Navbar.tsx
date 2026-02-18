@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, PageView } from '../types';
-import { LogOut, Layout, BookOpen, Users, Folder, Github } from 'lucide-react';
+import { LogOut, Layout, BookOpen, Users, Folder, Github, ShieldCheck } from 'lucide-react';
 
 interface NavbarProps {
     currentUser: User | null;
@@ -26,10 +26,18 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, currentPage, onNavigate, o
                         <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-violet-400 hidden sm:block">
                             ADA Ltda - Portal IA
                         </h1>
+                        {currentUser?.email === 'AIWIS' && (
+                            <span className="bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full">MASTER</span>
+                        )}
                     </div>
 
                     {currentUser && (
                         <div className="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
+                            {currentUser.email === 'AIWIS' && (
+                                <button onClick={() => onNavigate('admin')} className={navItemClass('admin')}>
+                                    <ShieldCheck size={18} /> <span className="hidden md:inline">Admin</span>
+                                </button>
+                            )}
                             <button onClick={() => onNavigate('inicio')} className={navItemClass('inicio')}>
                                 <Layout size={18} /> <span className="hidden md:inline">Inicio</span>
                             </button>
@@ -42,17 +50,13 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, currentPage, onNavigate, o
                             <button onClick={() => onNavigate('guia')} className={navItemClass('guia')}>
                                 <Folder size={18} /> <span className="hidden md:inline">Guía</span>
                             </button>
-                            <a href="https://github.com/soporteaiwis-lab/ada" target="_blank" rel="noopener noreferrer" 
-                               className="text-slate-400 hover:text-white p-2 transition-colors">
-                                <Github size={20} />
-                            </a>
                         </div>
                     )}
 
                     {currentUser && (
                         <div className="flex items-center gap-3 pl-4 border-l border-white/10 ml-4">
                             <div className="flex items-center gap-2 bg-white/5 rounded-full px-3 py-1 border border-white/10">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center font-bold text-sm">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${currentUser.email === 'AIWIS' ? 'bg-amber-500 text-black' : 'bg-gradient-to-br from-blue-500 to-violet-600 text-white'}`}>
                                     {currentUser.nombre.charAt(0).toUpperCase()}
                                 </div>
                                 <span className="text-sm font-medium hidden lg:block">{currentUser.nombre.split(' ')[0]}</span>

@@ -1,5 +1,6 @@
 export interface User {
   email: string;
+  password?: string; // New field for auth
   nombre: string;
   rol: string;
   habilidades: {
@@ -33,7 +34,15 @@ export interface Idea {
   timestamp: number;
 }
 
-export type PageView = 'inicio' | 'clases' | 'estudiantes' | 'guia';
+export type PageView = 'inicio' | 'clases' | 'estudiantes' | 'guia' | 'admin';
+
+export interface SyllabusDay {
+  title: string;
+  desc: string;
+  videoUrl?: string;
+}
+
+export type SyllabusStructure = Record<number, Record<string, SyllabusDay>>;
 
 export interface ToastMessage {
   id: number;
