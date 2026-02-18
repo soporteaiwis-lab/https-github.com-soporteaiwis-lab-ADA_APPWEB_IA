@@ -1,32 +1,34 @@
 import { User, SyllabusStructure } from '../types';
 import { FIREBASE_CONFIG, SYLLABUS_DATA as INITIAL_SYLLABUS } from '../constants';
-// import { initializeApp } from 'firebase/app';
-// import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-
-// --- MOCK FIREBASE IMPORTS ---
-// Using mocks to resolve build errors. App will run in Offline Mode.
-const initializeApp = (config: any) => null;
-const getFirestore = (app: any) => null;
-const doc = (db: any, ...args: any[]) => null;
-const getDoc = (ref: any) => Promise.resolve({ exists: () => false, data: () => ({}) });
-const setDoc = (ref: any, data: any, opts?: any) => Promise.resolve();
-// -----------------------------
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // --- INITIALIZATION ---
 let db: any = null;
 let isFirebaseReady = false;
+// Track specific error type for UI feedback
+let dbErrorType: 'none' | 'permission' | 'missing_db' = 'none';
 
 // Attempt to initialize Firebase
 try {
-    if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "TU_API_KEY_AQUI") {
-        // const app = initializeApp(FIREBASE_CONFIG);
-        // db = getFirestore(app);
-        // isFirebaseReady = true;
-        // console.log("🔥 Firebase SDK Inicializado."); 
-        console.warn("Firebase desactivado por errores de importación. Usando modo Offline.");
+    // Check if config is valid (not placeholder)
+    if (FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes("TU_API_KEY")) {
+        const app = initializeApp(FIREBASE_CONFIG);
+        
+        // CRITICAL FIX: Connect to the specific named database "aiwis-bd-ia-portal"
+        // The second argument specifies the database ID.
+        try {
+            db = getFirestore(app, "aiwis-bd-ia-portal");
+            isFirebaseReady = true;
+            console.log("🔥 Firebase SDK Inicializado. Conectando a DB: aiwis-bd-ia-portal"); 
+        } catch (dbError) {
+            console.error("Error conectando a la base de datos nombrada:", dbError);
+            // Fallback to default if named fails, though user requested specific one
+            db = getFirestore(app);
+        }
     }
 } catch (e) {
-    console.warn("Modo Offline forzado (Error init Firebase)");
+    console.warn("Modo Offline forzado (Error init Firebase)", e);
 }
 
 // --- UTILS ---
@@ -48,9 +50,9 @@ const MASTER_USER: User = {
 };
 
 // --- LOCAL STORAGE HELPERS (FALLBACK) ---
-// Changed keys to v2 to force a clean slate (ignoring old data)
-const LOCAL_USERS_KEY = 'ada_users_v2_clean';
-const LOCAL_SYLLABUS_KEY = 'ada_syllabus_v2_clean';
+// Bumped to v4 to ensure clean start for new project
+const LOCAL_USERS_KEY = 'ada_users_v4_clean';
+const LOCAL_SYLLABUS_KEY = 'ada_syllabus_v4_clean';
 
 const getLocalUsers = (): User[] => {
     const saved = localStorage.getItem(LOCAL_USERS_KEY);
@@ -81,12 +83,12 @@ const withTimeout = (promise: Promise<any>, ms: number) => {
 // --- CLOUD OPERATIONS (FIRESTORE) ---
 
 export const getCloudStatus = () => isFirebaseReady;
+export const getDbError = () => dbErrorType;
 
 /**
  * Fetch Users: Try Cloud -> Fail -> Fallback to LocalStorage
  */
 export const getStoredUsers = async (): Promise<User[]> => {
-    // If we already know cloud is dead, go local immediately
     if (!isFirebaseReady || !db) {
         return getLocalUsers();
     }
@@ -94,7 +96,7 @@ export const getStoredUsers = async (): Promise<User[]> => {
     try {
         const docRef = doc(db, "ada_portal", "users");
         // Short timeout. If it hangs, we assume offline/permission issue.
-        const docSnap: any = await withTimeout(getDoc(docRef), 2000);
+        const docSnap: any = await withTimeout(getDoc(docRef), 2500);
 
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -104,28 +106,30 @@ export const getStoredUsers = async (): Promise<User[]> => {
                 if (!Array.isArray(users)) users = [];
                 users.unshift(MASTER_USER);
             }
-            // Sync cloud data to local backup
             saveLocalUsers(users);
+            dbErrorType = 'none'; // Success
             return users;
         } else {
-            // First run on cloud
+            // First run on cloud - CREATE THE DOCUMENT
+            console.log("Creando documento inicial en la nube (aiwis-bd-ia-portal)...");
             try {
                 await setDoc(docRef, { list: [MASTER_USER] });
                 saveLocalUsers([MASTER_USER]);
+                dbErrorType = 'none';
                 return [MASTER_USER];
             } catch (writeError) {
+                handleFirebaseError(writeError);
                 return getLocalUsers();
             }
         }
     } catch (error: any) {
         handleFirebaseError(error);
-        // Fallback to local
         return getLocalUsers();
     }
 };
 
 /**
- * Fetch Syllabus: Try Cloud -> Fail -> Fallback to LocalStorage
+ * Fetch Syllabus
  */
 export const getStoredSyllabus = async (): Promise<SyllabusStructure> => {
     if (!isFirebaseReady || !db) {
@@ -134,7 +138,7 @@ export const getStoredSyllabus = async (): Promise<SyllabusStructure> => {
 
     try {
         const docRef = doc(db, "ada_portal", "syllabus");
-        const docSnap: any = await withTimeout(getDoc(docRef), 2000);
+        const docSnap: any = await withTimeout(getDoc(docRef), 2500);
 
         if (docSnap.exists()) {
             const data = docSnap.data().data as SyllabusStructure;
@@ -155,14 +159,9 @@ export const getStoredSyllabus = async (): Promise<SyllabusStructure> => {
     }
 };
 
-/**
- * Save Users: Try Cloud -> Fail -> Save to LocalStorage
- */
 export const saveUsersToCloud = async (users: User[]): Promise<boolean> => {
-    // Always save local first for instant UI feeling
     saveLocalUsers(users);
-
-    if (!isFirebaseReady || !db) return true; // Return true because local save succeeded
+    if (!isFirebaseReady || !db) return true; 
 
     try {
         const docRef = doc(db, "ada_portal", "users");
@@ -171,17 +170,12 @@ export const saveUsersToCloud = async (users: User[]): Promise<boolean> => {
         return true;
     } catch (error: any) {
         handleFirebaseError(error);
-        console.log("Usuarios guardados LOCALMENTE (Nube desconectada).");
         return true; 
     }
 };
 
-/**
- * Save Syllabus: Try Cloud -> Fail -> Save to LocalStorage
- */
 export const saveSyllabusToCloud = async (syllabus: SyllabusStructure): Promise<boolean> => {
     saveLocalSyllabus(syllabus);
-
     if (!isFirebaseReady || !db) return true;
 
     try {
@@ -194,69 +188,65 @@ export const saveSyllabusToCloud = async (syllabus: SyllabusStructure): Promise<
     }
 };
 
-/**
- * Sync Progress
- */
 export const syncProgress = async (user: User, progressMap: Record<string, boolean>) => {
-    // Local is the source of truth for progress usually
     localStorage.setItem(`ada_progress_${user.email}`, JSON.stringify(progressMap));
-
     if (!isFirebaseReady || !db) return;
 
     try {
         const docRef = doc(db, "ada_portal", `progress_${user.email.replace(/\./g, '_')}`);
         await setDoc(docRef, { map: progressMap }, { merge: true });
     } catch (error: any) {
-        // Silent fail, local storage handles it
-        if (isPermissionError(error)) isFirebaseReady = false;
+        if (isBlockingError(error)) isFirebaseReady = false;
     }
 };
 
-/**
- * Load Progress
- */
 export const loadLocalProgress = async (email: string): Promise<Record<string, boolean>> => {
-    // Check local first for speed
     const saved = localStorage.getItem(`ada_progress_${email}`);
     let localData = saved ? JSON.parse(saved) : {};
 
-    // Try to merge with cloud if available
     if (isFirebaseReady && db) {
         try {
              const docRef = doc(db, "ada_portal", `progress_${email.replace(/\./g, '_')}`);
-             const docSnap: any = await withTimeout(getDoc(docRef), 1000);
+             const docSnap: any = await withTimeout(getDoc(docRef), 1500);
              if (docSnap.exists()) {
                  const cloudData = docSnap.data().map || {};
-                 // Merge: True wins
-                 const merged = { ...localData, ...cloudData };
-                 return merged;
+                 return { ...localData, ...cloudData };
              }
-        } catch (e) {
-            // Ignore cloud error
-        }
+        } catch (e) { /* ignore */ }
     }
-
     return localData;
 };
 
-// --- ERROR HANDLING HELPER ---
+// --- ERROR HANDLING ---
 function handleFirebaseError(error: any) {
-    if (isPermissionError(error)) {
+    console.error("Firebase Error Detectado:", error);
+    
+    // Check for "Database Not Found" (Project exists but DB not created or wrong name)
+    if (error?.code === 'not-found' || error?.message?.includes('not-found') || error?.message?.includes('database') && error?.message?.includes('does not exist')) {
+        dbErrorType = 'missing_db';
+        isFirebaseReady = false;
+        db = null;
+        return;
+    }
+
+    // Check for Permission/Rules issues
+    if (isBlockingError(error)) {
+        dbErrorType = 'permission';
         if (isFirebaseReady) {
-            console.warn("⚠️ CONEXIÓN GOOGLE CLOUD RECHAZADA: Cambiando a Modo Local Permanente para esta sesión.");
-            // Kill the connection to stop further errors
+            console.warn("⚠️ CONEXIÓN RECHAZADA: Modo Local.");
             isFirebaseReady = false; 
             db = null; 
         }
     }
 }
 
-function isPermissionError(error: any) {
+function isBlockingError(error: any) {
     const msg = error?.message || '';
     const code = error?.code || '';
     return (
         msg.includes('permission-denied') || 
         msg.includes('Cloud Firestore API has not been used') || 
+        msg.includes('Missing or insufficient permissions') ||
         code === 'permission-denied'
     );
 }

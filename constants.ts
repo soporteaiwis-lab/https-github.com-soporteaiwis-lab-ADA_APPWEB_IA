@@ -1,13 +1,14 @@
 
 // --- GOOGLE FIREBASE CLOUD DATABASE CONFIG ---
-// Debes obtener estas credenciales en: https://console.firebase.google.com/
+// ⚠️ IMPORTANTE: PEGA AQUÍ LAS CREDENCIALES DEL PROYECTO "AIWIS MENTOR CLASES"
+// Ve a: https://console.firebase.google.com/ > Tu Proyecto > Configuración del Proyecto > General > Tus Apps > SDK Setup
 export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDN6bUA6X06VQCLsUskCobzjV9LP85hT1Q",
-  authDomain: "portal-ada-ia.firebaseapp.com",
-  projectId: "portal-ada-ia",
-  storageBucket: "portal-ada-ia.firebasestorage.app",
-  messagingSenderId: "96287198149",
-  appId: "1:96287198149:web:e85c201e8c44fdb38c19ac"
+  apiKey: "AIzaSyDSaR4mpibwg6XSkQdE8jlwOMq7WoWXKpg",
+  authDomain: "gen-lang-client-0359889313.firebaseapp.com",
+  projectId: "gen-lang-client-0359889313",
+  storageBucket: "gen-lang-client-0359889313.firebasestorage.app",
+  messagingSenderId: "360369243391",
+  appId: "1:360369243391:web:3d7f883ed29ac6462af8ca"
 };
 
 export const APP_CONFIG = {
@@ -16,14 +17,12 @@ export const APP_CONFIG = {
 
 export const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
 
-// ESTRUCTURA VACÍA PARA INICIO LIMPIO
-// Se definen las 4 semanas y los 5 días para que el Admin Panel genere los inputs,
-// pero el contenido (title, desc, videoUrl) está vacío.
+// ESTRUCTURA VACÍA PARA INICIO LIMPIO (CANVAS EN BLANCO)
 const EMPTY_DAY = { title: "", desc: "", videoUrl: "" };
 
 export const SYLLABUS_DATA: Record<number, Record<string, { title: string; desc: string; videoUrl?: string }>> = {
   1: {
-    lunes: { ...EMPTY_DAY, title: "Clase Pendiente" }, // Título placeholder para que sea clicable en Admin
+    lunes: { ...EMPTY_DAY },
     martes: { ...EMPTY_DAY },
     miercoles: { ...EMPTY_DAY },
     jueves: { ...EMPTY_DAY },

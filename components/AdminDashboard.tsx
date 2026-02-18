@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { User, SyllabusStructure } from '../types';
 import { DIAS_SEMANA, FIREBASE_CONFIG } from '../constants';
-import { getCloudStatus } from '../services/dataService';
-import { Save, UserPlus, Trash2, Database, Video, BookOpen, Cpu, ShieldCheck, RefreshCw, Smartphone, Monitor, AlertTriangle } from 'lucide-react';
+import { getCloudStatus, getDbError } from '../services/dataService';
+import { Save, UserPlus, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu } from 'lucide-react';
 
 interface AdminDashboardProps {
     users: User[];
@@ -18,6 +18,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
     const [isSaving, setIsSaving] = useState(false);
     
     const isCloudActive = getCloudStatus();
+    const dbError = getDbError();
 
     // --- USER MANAGEMENT ---
     const handleAddUser = async (e: React.FormEvent) => {
@@ -64,7 +65,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
             ...newSyllabus[parseInt(week)][day],
             [field]: value
         };
-        // Debounce saving in real app, but for now we pass up
         onUpdateSyllabus(newSyllabus);
     };
 
@@ -72,26 +72,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
         try {
             return JSON.stringify(data, null, 2);
         } catch (e) {
-            return "Error visualizando datos (referencia circular o formato inválido)";
+            return "Error visualizando datos";
         }
     };
 
     return (
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
-            {/* ALERT IF NO FIREBASE */}
-            {!isCloudActive && (
+            {/* ALERT: DB MISSING OR DISABLED */}
+            {!isCloudActive && dbError === 'missing_db' && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
+                    <Database className="text-red-500 shrink-0 mt-1" />
+                    <div>
+                        <h3 className="font-bold text-red-500">Base de Datos "aiwis-bd-ia-portal" No Disponible</h3>
+                        <p className="text-sm text-slate-300 mb-2">
+                            El sistema intenta conectar a la base de datos nombrada <strong>aiwis-bd-ia-portal</strong>, pero falla.
+                        </p>
+                        <ul className="list-disc list-inside text-xs text-slate-400 space-y-2 font-mono bg-black/30 p-3 rounded">
+                            <li><strong>Causa 1 (Status):</strong> La base de datos está "Inhabilitada" en la consola. Debes ir a Firebase Console y hacer clic en "Habilitar" o crearla.</li>
+                            <li><strong>Causa 2 (Config):</strong> El <code>projectId</code> en <code>constants.ts</code> no coincide con el proyecto donde vive esta base de datos.</li>
+                        </ul>
+                    </div>
+                </div>
+            )}
+
+            {/* ALERT: PERMISSIONS */}
+            {!isCloudActive && dbError === 'permission' && (
                 <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-1" />
                     <div>
-                        <h3 className="font-bold text-amber-500">Base de Datos: Permiso Denegado / No Configurada</h3>
+                        <h3 className="font-bold text-amber-500">Permisos Insuficientes en "aiwis-bd-ia-portal"</h3>
                         <p className="text-sm text-slate-300 mb-2">
-                            Google Cloud rechazó la conexión. La API de Firestore no está habilitada.
+                            La base de datos existe, pero las Reglas de Seguridad bloquean el acceso.
                         </p>
-                        <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono bg-black/30 p-2 rounded">
-                            <li>Ve a <a href={`https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=${FIREBASE_CONFIG.projectId}`} target="_blank" className="text-blue-400 underline">Google Cloud Console</a></li>
-                            <li>Presiona el botón <strong>HABILITAR (ENABLE)</strong></li>
-                            <li>Espera 2 minutos y recarga esta página.</li>
+                        <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono bg-black/30 p-3 rounded">
+                            <li>Ve a <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline">Firebase Console</a>.</li>
+                            <li>Selecciona el proyecto <strong>AIWIS MENTOR CLASES</strong>.</li>
+                            <li>Ve a <strong>Firestore Database</strong> y selecciona <strong>aiwis-bd-ia-portal</strong> en el menú desplegable (arriba).</li>
+                            <li>Pestaña <strong>Reglas</strong> y pega:</li>
                         </ol>
+                        <div className="mt-2 text-xs text-emerald-400 bg-black p-2 rounded font-mono select-all">
+                            rules_version = '2';<br/>
+                            service cloud.firestore {'{'}<br/>
+                            &nbsp;&nbsp;match /databases/{"{database}"}/documents {'{'}<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;match /{"{document=**}"} {'{'}<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{'}'}<br/>
+                            &nbsp;&nbsp;{'}'}<br/>
+                            {'}'}
+                        </div>
                     </div>
                 </div>
             )}
@@ -107,7 +135,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                             {isCloudActive ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                    <span className="text-emerald-400 font-bold">Google Firestore Conectado</span>
+                                    <span className="text-emerald-400 font-bold">Conectado: aiwis-bd-ia-portal</span>
                                 </>
                             ) : (
                                 <>
@@ -139,7 +167,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                     {/* USERS TAB */}
                     {activeTab === 'users' && (
                         <div className="space-y-6">
-                            {/* Add User Form - Stacked on Mobile */}
                             <form onSubmit={handleAddUser} className="bg-white/5 p-4 rounded-xl border border-white/10 flex flex-col md:flex-row gap-4 items-end">
                                 <div className="w-full md:flex-1">
                                     <label className="block text-xs text-slate-400 mb-1">Nuevo Email</label>
@@ -154,7 +181,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                 </button>
                             </form>
 
-                            {/* User List - Mobile Cards / Desktop Table */}
                             <div className="hidden md:block overflow-x-auto rounded-xl border border-white/10">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -195,7 +221,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                 </table>
                             </div>
 
-                            {/* Mobile View for Users */}
                             <div className="md:hidden space-y-3">
                                 {users.map((user) => (
                                     <div key={user.email} className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col gap-3">
@@ -210,19 +235,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                 </button>
                                             )}
                                         </div>
-                                        <div>
-                                            <label className="text-xs text-slate-500 mb-1 block">Rol Asignado</label>
-                                            <select 
-                                                value={user.rol} 
-                                                onChange={(e) => handleRoleChange(user.email, e.target.value)}
-                                                className="w-full bg-slate-950 border border-white/20 rounded p-2 text-sm text-white"
-                                                disabled={user.email === 'AIWIS' || !isCloudActive}
-                                            >
-                                                <option value="Usuario">Usuario</option>
-                                                <option value="Mentor AIWIS">Mentor</option>
-                                                <option value="Admin">Admin</option>
-                                            </select>
-                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -235,7 +247,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                             <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row items-center gap-2 text-center md:text-left">
                                 <Monitor size={20} />
                                 <div>
-                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo (Firestore)' : 'Inactivo (Revisa la Alerta)'}
+                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo' : 'Inactivo (Revisa Configuración)'}
                                 </div>
                             </div>
 
@@ -255,19 +267,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                         {day}
                                                     </div>
                                                     <div className="md:col-span-4 space-y-2">
-                                                        <label className="md:hidden text-xs text-blue-400 font-bold">Título de la clase</label>
                                                         <input 
                                                             type="text" 
                                                             value={dayData.title}
                                                             onChange={(e) => handleContentChange(week, day, 'title', e.target.value)}
-                                                            className="w-full bg-transparent border-b border-white/10 focus:border-blue-500 outline-none text-white font-medium pb-1 transition-all"
+                                                            className="w-full bg-transparent border-b border-white/10 focus:border-blue-500 outline-none text-white font-medium pb-1 transition-all placeholder:text-slate-600"
+                                                            placeholder="Título de la clase..."
                                                             disabled={!isCloudActive}
                                                         />
-                                                        <label className="md:hidden text-xs text-slate-500 mt-2 block">Descripción</label>
                                                         <textarea 
                                                             value={dayData.desc}
                                                             onChange={(e) => handleContentChange(week, day, 'desc', e.target.value)}
-                                                            className="w-full bg-slate-900/50 border border-white/10 rounded p-2 text-xs text-slate-400 h-20 focus:border-blue-500 outline-none transition-all"
+                                                            className="w-full bg-slate-900/50 border border-white/10 rounded p-2 text-xs text-slate-400 h-20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-700"
+                                                            placeholder="Descripción del contenido..."
                                                             disabled={!isCloudActive}
                                                         />
                                                     </div>
@@ -298,27 +310,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                         <div className="space-y-6">
                             <div className="bg-gradient-to-r from-emerald-900/40 to-slate-900 border border-emerald-500/30 rounded-xl p-6">
                                 <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                                    <Cpu className="text-emerald-400" /> Firebase Cloud Status
+                                    <Cpu className="text-emerald-400" /> Firebase Status: aiwis-bd-ia-portal
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO (Permisos)</span>}
+                                    Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO ({dbError})</span>}
                                 </p>
                                 <div className="p-4 bg-black/50 rounded-lg text-xs font-mono break-all text-slate-500">
-                                    Project ID: {FIREBASE_CONFIG.projectId}
+                                    Project Config ID: {FIREBASE_CONFIG.projectId}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-6">
-                                <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
-                                    <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios (JSON Cloud)</h4>
-                                    <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
-                                        {isCloudActive ? safeStringify(users) : "Conecta a la nube para ver datos reales."}
-                                    </div>
+                            <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
+                                <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios</h4>
+                                <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
+                                    {isCloudActive ? safeStringify(users) : "Conecta a la nube para ver datos reales."}
                                 </div>
                             </div>
                         </div>
                     )}
-
                 </div>
             </div>
         </div>
