@@ -68,6 +68,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
         onUpdateSyllabus(newSyllabus);
     };
 
+    const safeStringify = (data: any) => {
+        try {
+            return JSON.stringify(data, null, 2);
+        } catch (e) {
+            return "Error visualizando datos (referencia circular o formato inválido)";
+        }
+    };
+
     return (
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
             {/* ALERT IF NO FIREBASE */}
@@ -75,16 +83,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                 <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-1" />
                     <div>
-                        <h3 className="font-bold text-amber-500">Base de Datos NO Configurada</h3>
+                        <h3 className="font-bold text-amber-500">Base de Datos: Permiso Denegado / No Configurada</h3>
                         <p className="text-sm text-slate-300 mb-2">
-                            Para que el portal funcione en la nube real de Google (no local, no Sheets), debes configurar Firebase.
+                            Google Cloud rechazó la conexión. La API de Firestore no está habilitada.
                         </p>
                         <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono bg-black/30 p-2 rounded">
-                            <li>Ve a <a href="https://console.firebase.google.com" target="_blank" className="text-blue-400 underline">console.firebase.google.com</a></li>
-                            <li>Crea un proyecto nuevo (gratis)</li>
-                            <li>Entra a "Firestore Database" y crea una base de datos</li>
-                            <li>Ve a Configuración del Proyecto -{'>'} General -{'>'} Web App</li>
-                            <li>Copia las credenciales y pégalas en el archivo <code>constants.ts</code></li>
+                            <li>Ve a <a href={`https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=${FIREBASE_CONFIG.projectId}`} target="_blank" className="text-blue-400 underline">Google Cloud Console</a></li>
+                            <li>Presiona el botón <strong>HABILITAR (ENABLE)</strong></li>
+                            <li>Espera 2 minutos y recarga esta página.</li>
                         </ol>
                     </div>
                 </div>
@@ -229,7 +235,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                             <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row items-center gap-2 text-center md:text-left">
                                 <Monitor size={20} />
                                 <div>
-                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo (Firestore)' : 'Inactivo (Configurar Firebase)'}
+                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo (Firestore)' : 'Inactivo (Revisa la Alerta)'}
                                 </div>
                             </div>
 
@@ -295,7 +301,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                     <Cpu className="text-emerald-400" /> Firebase Cloud Status
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO</span>}
+                                    Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO (Permisos)</span>}
                                 </p>
                                 <div className="p-4 bg-black/50 rounded-lg text-xs font-mono break-all text-slate-500">
                                     Project ID: {FIREBASE_CONFIG.projectId}
@@ -306,7 +312,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                 <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
                                     <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios (JSON Cloud)</h4>
                                     <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
-                                        {isCloudActive ? JSON.stringify(users, null, 2) : "Conecta a la nube para ver datos reales."}
+                                        {isCloudActive ? safeStringify(users) : "Conecta a la nube para ver datos reales."}
                                     </div>
                                 </div>
                             </div>
