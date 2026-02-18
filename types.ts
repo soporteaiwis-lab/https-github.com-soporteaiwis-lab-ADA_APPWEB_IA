@@ -1,6 +1,7 @@
+
 export interface User {
   email: string;
-  password?: string; // New field for auth
+  password?: string;
   nombre: string;
   rol: string;
   habilidades: {
@@ -16,15 +17,19 @@ export interface User {
 }
 
 export interface ClassSession {
-  id: string; // e.g., "1-1-lunes" (Phase-Week-Day)
-  fase: number;
-  semana: number;
-  dia: string;
+  id: string;
   title: string;
   desc: string;
-  videoUrl?: string;
-  videoId?: string;
-  completed: boolean;
+  videoUrl: string;
+  duration: string; // Editable by admin (e.g., "45 min", "1h 20m")
+  videoId?: string; // Extracted automatically
+  completed: boolean; // User specific state
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  classes: ClassSession[];
 }
 
 export interface Idea {
@@ -35,14 +40,6 @@ export interface Idea {
 }
 
 export type PageView = 'inicio' | 'clases' | 'estudiantes' | 'guia' | 'admin';
-
-export interface SyllabusDay {
-  title: string;
-  desc: string;
-  videoUrl?: string;
-}
-
-export type SyllabusStructure = Record<number, Record<string, SyllabusDay>>;
 
 export interface ToastMessage {
   id: number;

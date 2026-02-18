@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { ClassSession } from '../types';
-import { X, MessageSquare, FileText, Sparkles, Send } from 'lucide-react';
+import { X, FileText, Sparkles, Send, Clock } from 'lucide-react';
 import { askGeminiTutor } from '../services/geminiService';
 
 interface ClassModalProps {
@@ -25,7 +26,7 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
         setQuestion('');
         setLoadingAi(true);
 
-        const context = `Título: ${session.title}. Descripción: ${session.desc}. Semana: ${session.semana}. Fase: ${session.fase}.`;
+        const context = `Clase: ${session.title}. Descripción: ${session.desc}.`;
         const answer = await askGeminiTutor(context, userQ);
 
         setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
@@ -40,9 +41,10 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
                 <div className="p-6 border-b border-white/10 flex justify-between items-start bg-slate-800/50">
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-1">{session.title}</h2>
-                        <div className="flex gap-3 text-slate-400 text-sm">
-                            <span className="bg-blue-900/30 px-2 py-0.5 rounded text-blue-300">Semana {session.semana}</span>
-                            <span className="capitalize">{session.dia}</span>
+                        <div className="flex gap-3 text-slate-400 text-sm items-center">
+                            <span className="flex items-center gap-1 bg-blue-900/30 px-2 py-0.5 rounded text-blue-300">
+                                <Clock size={12} /> {session.duration || "Sin duración definida"}
+                            </span>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
@@ -62,9 +64,9 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
                             />
                         ) : (
                             <div className="text-center p-10">
-                                <span className="text-4xl block mb-4">🚧</span>
-                                <h3 className="text-xl font-bold">Video no disponible aún</h3>
-                                <p className="text-slate-500 mt-2">Este contenido se liberará próximamente.</p>
+                                <span className="text-4xl block mb-4">🎬</span>
+                                <h3 className="text-xl font-bold">Video no asignado</h3>
+                                <p className="text-slate-500 mt-2">El administrador aún no ha cargado el video para esta clase.</p>
                             </div>
                         )}
                     </div>
@@ -82,25 +84,17 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
                                 onClick={() => setActiveTab('tutor')}
                                 className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'tutor' ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-slate-400 hover:text-white'}`}
                             >
-                                <Sparkles size={16} /> Tutor IA (Gemini)
+                                <Sparkles size={16} /> Tutor IA
                             </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                             {activeTab === 'desc' ? (
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-bold text-white">Sobre esta clase</h3>
-                                    <p className="text-slate-300 leading-relaxed">
+                                    <h3 className="text-lg font-bold text-white">Detalles de la clase</h3>
+                                    <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
                                         {session.desc}
                                     </p>
-                                    <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                                        <h4 className="text-blue-300 font-bold text-sm mb-2">Objetivos de aprendizaje</h4>
-                                        <ul className="list-disc list-inside text-sm text-slate-400 space-y-1">
-                                            <li>Comprender los conceptos fundamentales.</li>
-                                            <li>Aplicar la teoría a casos de uso de ADA.</li>
-                                            <li>Preparar el quiz de evaluación.</li>
-                                        </ul>
-                                    </div>
                                 </div>
                             ) : (
                                 <div className="flex flex-col h-full">
@@ -108,7 +102,7 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
                                         {chatHistory.length === 0 && (
                                             <div className="text-center py-8 text-slate-500">
                                                 <Sparkles size={32} className="mx-auto mb-2 opacity-50" />
-                                                <p className="text-sm">¡Hola! Soy tu Tutor IA con tecnología Gemini. Pregúntame cualquier cosa sobre esta clase.</p>
+                                                <p className="text-sm">¡Hola! Soy tu Tutor IA. Pregúntame sobre el contenido de este video.</p>
                                             </div>
                                         )}
                                         {chatHistory.map((msg, idx) => (
@@ -131,7 +125,7 @@ const ClassModal: React.FC<ClassModalProps> = ({ session, onClose }) => {
                                             type="text" 
                                             value={question}
                                             onChange={(e) => setQuestion(e.target.value)}
-                                            placeholder="Ej: Explícame más sobre..."
+                                            placeholder="Haz una pregunta..."
                                             className="w-full bg-slate-800 border border-white/20 rounded-lg pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-violet-500 transition-colors"
                                         />
                                         <button 

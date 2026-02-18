@@ -1,8 +1,8 @@
+
 import React, { useRef } from 'react';
 import { ClassSession } from '../types';
 import { extractVideoId } from '../services/dataService';
-import { Play, CheckCircle, Clock, ChevronLeft, ChevronRight, FileText, BrainCircuit } from 'lucide-react';
-import { APP_CONFIG } from '../constants';
+import { Play, CheckCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ClassCarouselProps {
     title: string;
@@ -25,6 +25,17 @@ const ClassCarousel: React.FC<ClassCarouselProps> = ({ title, classes, onClassCl
         }
     };
 
+    if (classes.length === 0) {
+        return (
+            <div className="mb-10 opacity-50">
+                <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
+                <div className="p-6 border border-white/10 rounded-xl bg-white/5 text-center text-sm">
+                    No hay clases disponibles en este módulo aún.
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mb-10 relative group">
             <div className="flex justify-between items-center mb-4 px-2">
@@ -44,18 +55,12 @@ const ClassCarousel: React.FC<ClassCarouselProps> = ({ title, classes, onClassCl
                 className="flex gap-4 overflow-x-auto pb-6 px-2 no-scrollbar snap-x snap-mandatory"
                 style={{ scrollBehavior: 'smooth' }}
             >
-                {classes.map((session, index) => {
+                {classes.map((session) => {
                      const videoId = extractVideoId(session.videoUrl || '');
                      const thumbnail = videoId 
                         ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` 
                         : null;
                      
-                     // Generate external links
-                     const classNum = ((session.semana - 1) * 5) + (['lunes','martes','miercoles','jueves','viernes'].indexOf(session.dia) + 1);
-                     const numStr = String(classNum).padStart(2, '0');
-                     const textUrl = `${APP_CONFIG.GITHUB_REPO_BASE}/clase${numStr}.html`;
-                     const quizUrl = `${APP_CONFIG.GITHUB_REPO_BASE}/quiz${numStr}.html`;
-
                     return (
                         <div 
                             key={session.id}
@@ -98,9 +103,6 @@ const ClassCarousel: React.FC<ClassCarouselProps> = ({ title, classes, onClassCl
 
                             {/* Info Area */}
                             <div className="p-4">
-                                <div className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">
-                                    {session.dia}
-                                </div>
                                 <h4 className="font-bold text-white mb-2 leading-tight h-10 line-clamp-2">
                                     {session.title}
                                 </h4>
@@ -108,35 +110,15 @@ const ClassCarousel: React.FC<ClassCarouselProps> = ({ title, classes, onClassCl
                                     {session.desc}
                                 </p>
                                 
-                                <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
-                                    <span className="flex items-center gap-1"><Clock size={12} /> 60 min</span>
+                                <div className="flex items-center justify-between text-xs text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                        <Clock size={12} /> {session.duration || "Duración N/A"}
+                                    </span>
                                     {videoId ? (
                                         <span className="text-emerald-500">Disponible</span>
                                     ) : (
                                         <span className="text-amber-500">Próximamente</span>
                                     )}
-                                </div>
-
-                                {/* Quick Actions */}
-                                <div className="flex gap-2 mt-auto">
-                                    <a 
-                                        href={textUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium bg-white/5 hover:bg-blue-600 rounded border border-white/10 transition-colors"
-                                    >
-                                        <FileText size={12} /> Texto
-                                    </a>
-                                    <a 
-                                        href={quizUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium bg-white/5 hover:bg-violet-600 rounded border border-white/10 transition-colors"
-                                    >
-                                        <BrainCircuit size={12} /> Quiz
-                                    </a>
                                 </div>
                             </div>
                         </div>

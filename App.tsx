@@ -1,11 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, ClassSession, PageView, Idea, SyllabusStructure } from './types';
-import { DIAS_SEMANA } from './constants';
+import { User, ClassSession, PageView, Idea, CourseModule } from './types';
 import { 
   getStoredUsers,
-  getStoredSyllabus,
+  getStoredModules,
   saveUsersToCloud,
-  saveSyllabusToCloud,
+  saveModulesToCloud,
   extractVideoId,
   syncProgress, 
   loadLocalProgress
@@ -15,15 +15,14 @@ import Navbar from './components/Navbar';
 import ClassCarousel from './components/ClassCarousel';
 import ClassModal from './components/ClassModal';
 import AdminDashboard from './components/AdminDashboard';
-import { Book, Lightbulb, UserCheck, TrendingUp, Download, Loader2, Sparkles, Lock, Shield } from 'lucide-react';
+import { Book, Lightbulb, TrendingUp, Sparkles, Lock, Shield, Loader2 } from 'lucide-react';
 
 const App = () => {
   // State
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
-  const [syllabus, setSyllabus] = useState<SyllabusStructure>({});
+  const [modules, setModules] = useState<CourseModule[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [videoMap, setVideoMap] = useState<Record<string, string>>({});
   const [progressMap, setProgressMap] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState<PageView>('inicio');
   const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
@@ -38,23 +37,14 @@ const App = () => {
   useEffect(() => {
     const init = async () => {
       // Load Database from Cloud (Firebase)
-      const [fetchedUsers, fetchedSyllabus] = await Promise.all([
+      const [fetchedUsers, fetchedModules] = await Promise.all([
           getStoredUsers(),
-          getStoredSyllabus()
+          getStoredModules()
       ]);
       
       setUsers(fetchedUsers);
-      setSyllabus(fetchedSyllabus);
+      setModules(fetchedModules);
       
-      const vMap: Record<string, string> = {};
-      Object.entries(fetchedSyllabus).forEach(([week, days]) => {
-          Object.entries(days).forEach(([day, data]) => {
-              if (data.videoUrl) vMap[`1-${week}-${day}`] = data.videoUrl;
-          });
-      });
-      setVideoMap(vMap);
-
-      // Check local storage for session (Only session state, data is fresh from cloud)
       const savedUser = localStorage.getItem('ada_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
@@ -64,7 +54,6 @@ const App = () => {
         const savedProgress = await loadLocalProgress(parsed.email);
         setProgressMap(savedProgress);
         
-        // Ideas are local for now unless we add cloud collection for them, keeping local to keep it simple
         const savedIdeas = localStorage.getItem(`ada_ideas_${parsed.email}`);
         if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
       }
@@ -80,7 +69,6 @@ const App = () => {
     
     const user = users.find(u => u.email === selectedEmail);
     if (user) {
-        // Auth Check
         if (user.password) {
             if (user.password !== password) {
                 setLoginError('Contraseña incorrecta');
@@ -91,14 +79,12 @@ const App = () => {
       setCurrentUser(user);
       localStorage.setItem('ada_user', JSON.stringify(user));
       
-      // Load progress
       const savedProgress = await loadLocalProgress(user.email);
       setProgressMap(savedProgress);
       
       const savedIdeas = localStorage.getItem(`ada_ideas_${user.email}`);
       if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
       
-      // Redirect Master directly to Admin
       if (user.email === 'AIWIS') {
           setCurrentPage('admin');
       }
@@ -120,24 +106,15 @@ const App = () => {
     setCurrentPage('inicio');
   };
 
-  // ADMIN UPDATES - Calls Firebase Cloud functions
+  // ADMIN UPDATES
   const handleUpdateUsers = async (newUsers: User[]) => {
       setUsers(newUsers);
       await saveUsersToCloud(newUsers); 
   };
 
-  const handleUpdateSyllabus = async (newSyllabus: SyllabusStructure) => {
-      setSyllabus(newSyllabus);
-      await saveSyllabusToCloud(newSyllabus);
-      
-      // Rebuild video map for UI
-      const vMap: Record<string, string> = {};
-      Object.entries(newSyllabus).forEach(([week, days]) => {
-          Object.entries(days).forEach(([day, data]) => {
-              if (data.videoUrl) vMap[`1-${week}-${day}`] = data.videoUrl;
-          });
-      });
-      setVideoMap(vMap);
+  const handleUpdateModules = async (newModules: CourseModule[]) => {
+      setModules(newModules);
+      await saveModulesToCloud(newModules);
   };
 
   const toggleProgress = async (sessionId: string, status: boolean) => {
@@ -157,7 +134,8 @@ const App = () => {
 
   const handleReportGen = async () => {
       if(!currentUser) return;
-      const totalClasses = 20;
+      // Calculate total classes across all modules
+      const totalClasses = modules.reduce((acc, mod) => acc + mod.classes.length, 0) || 1;
       const completed = Object.values(progressMap).filter(v => v).length;
       const pct = Math.round((completed / totalClasses) * 100);
       
@@ -179,31 +157,13 @@ const App = () => {
       `);
   };
 
-  // Helper to build Class Sessions from Dynamic Syllabus + Video Map
-  const getClassesForPhase = (phase: number, week: number) => {
-    const weekData = syllabus[week];
-    if (!weekData) return [];
-    
-    return DIAS_SEMANA.map(day => {
-      const info = weekData[day];
-      if (!info) return null;
-
-      const id = `${phase}-${week}-${day}`; 
-      // Use video from syllabus first, fallback to map
-      const videoUrl = info.videoUrl || videoMap[id];
-      
-      return {
-        id,
-        fase: phase,
-        semana: week,
-        dia: day,
-        title: info.title,
-        desc: info.desc,
-        videoUrl: videoUrl,
-        videoId: extractVideoId(videoUrl),
-        completed: !!progressMap[id]
-      } as ClassSession;
-    }).filter(Boolean) as ClassSession[];
+  // Prepare classes for view (mapping progress)
+  const getEnrichedClasses = (classes: ClassSession[]) => {
+      return classes.map(c => ({
+          ...c,
+          videoId: extractVideoId(c.videoUrl),
+          completed: !!progressMap[c.id]
+      }));
   };
 
   if (loading) {
@@ -211,18 +171,16 @@ const App = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white flex-col gap-4">
         <Loader2 className="animate-spin w-10 h-10 text-blue-500" /> 
         <div className="text-center">
-            <h2 className="text-xl font-bold">Conectando con Google Firestore...</h2>
-            <p className="text-slate-400 text-sm">Cargando base de datos en tiempo real</p>
+            <h2 className="text-xl font-bold">Conectando Portal ADA IA...</h2>
+            <p className="text-slate-400 text-sm">Cargando base de datos 'aiwis-bd-ia-portal'</p>
         </div>
       </div>
     );
   }
 
-  // --- LOGIN VIEW ---
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Background Gradients */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
              <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px]"></div>
              <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[100px]"></div>
@@ -274,20 +232,13 @@ const App = () => {
                 </div>
             )}
 
-            <button 
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold py-3 rounded-lg hover:shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1"
-            >
+            <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold py-3 rounded-lg hover:shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1">
               Ingresar al Portal
             </button>
           </form>
 
-          {/* AUTO FILL LINK FOR MASTER */}
           <div className="mt-6 pt-6 border-t border-white/10 text-center">
-               <button 
-                onClick={handleAutoLoginMaster}
-                className="text-xs text-slate-500 hover:text-emerald-400 transition-colors flex items-center justify-center gap-1 mx-auto"
-               >
+               <button onClick={handleAutoLoginMaster} className="text-xs text-slate-500 hover:text-emerald-400 transition-colors flex items-center justify-center gap-1 mx-auto">
                    <Shield size={12}/> Auto-Login Master Root (AIWIS)
                </button>
           </div>
@@ -296,9 +247,10 @@ const App = () => {
     );
   }
 
-  // --- MAIN APP ---
+  // Calculate Progress
+  const totalClasses = modules.reduce((acc, m) => acc + m.classes.length, 0) || 1;
   const completedCount = Object.values(progressMap).filter(v => v).length;
-  const progressPct = Math.round((completedCount / 20) * 100);
+  const progressPct = Math.round((completedCount / totalClasses) * 100);
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
@@ -315,16 +267,15 @@ const App = () => {
         {currentPage === 'admin' && currentUser.email === 'AIWIS' && (
             <AdminDashboard 
                 users={users} 
-                syllabus={syllabus}
+                modules={modules}
                 onUpdateUsers={handleUpdateUsers}
-                onUpdateSyllabus={handleUpdateSyllabus}
+                onUpdateModules={handleUpdateModules}
             />
         )}
         
-        {/* PAGE: INICIO (Regular User) */}
+        {/* PAGE: INICIO */}
         {currentPage === 'inicio' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Stats Card */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                     <div className="flex items-center gap-4 mb-6">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-2xl font-bold">
@@ -352,14 +303,11 @@ const App = () => {
                                     <div className="h-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-1000" style={{ width: `${progressPct}%` }}></div>
                                 </div>
                             </div>
-                            {/* Stats grid... */}
                         </div>
                     )}
                 </div>
 
-                {/* Ideas & Report */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col h-full">
-                     {/* ... (Existing Ideas Logic) ... */}
                      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                         <Lightbulb className="text-amber-400" /> Centro de Ideas
                     </h3>
@@ -404,52 +352,41 @@ const App = () => {
                                 <TrendingUp size={18} />
                             </button>
                         </div>
-                        <button 
-                            type="button" 
-                            onClick={handleReportGen}
-                            className="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-                        >
-                            <Sparkles size={16} className="text-violet-400" /> Generar Reporte Inteligente con Gemini
+                        <button type="button" onClick={handleReportGen} className="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                            <Sparkles size={16} className="text-violet-400" /> Generar Reporte Inteligente
                         </button>
                     </form>
                 </div>
             </div>
         )}
 
-        {/* PAGE: CLASES (Now Dynamic) */}
+        {/* PAGE: CLASES (Dynamic Modules) */}
         {currentPage === 'clases' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="text-center mb-10">
                     <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-violet-400 mb-2">
                         Mis Clases
                     </h2>
-                    <p className="text-slate-400">Contenido Dinámico Actualizado</p>
+                    <p className="text-slate-400">Contenido Modular</p>
                 </div>
 
-                <ClassCarousel 
-                    title="📅 Semana 1" 
-                    classes={getClassesForPhase(1, 1)} 
-                    onClassClick={setSelectedSession}
-                    onToggleProgress={toggleProgress}
-                />
-                <ClassCarousel 
-                    title="📅 Semana 2" 
-                    classes={getClassesForPhase(1, 2)} 
-                    onClassClick={setSelectedSession}
-                    onToggleProgress={toggleProgress}
-                />
-                <ClassCarousel 
-                    title="📅 Semana 3" 
-                    classes={getClassesForPhase(1, 3)} 
-                    onClassClick={setSelectedSession}
-                    onToggleProgress={toggleProgress}
-                />
-                <ClassCarousel 
-                    title="📅 Semana 4" 
-                    classes={getClassesForPhase(1, 4)} 
-                    onClassClick={setSelectedSession}
-                    onToggleProgress={toggleProgress}
-                />
+                {modules.length === 0 ? (
+                    <div className="text-center py-20 text-slate-500">
+                        <div className="text-4xl mb-2">📂</div>
+                        <p>No hay módulos disponibles.</p>
+                        <p className="text-xs">El administrador debe crear contenido.</p>
+                    </div>
+                ) : (
+                    modules.map(module => (
+                        <ClassCarousel 
+                            key={module.id}
+                            title={module.title}
+                            classes={getEnrichedClasses(module.classes)}
+                            onClassClick={setSelectedSession}
+                            onToggleProgress={toggleProgress}
+                        />
+                    ))
+                )}
             </div>
         )}
         
@@ -469,30 +406,31 @@ const App = () => {
                                      <div className="text-xs text-slate-400">{u.rol}</div>
                                  </div>
                              </div>
-                             {/* Stats... */}
                          </div>
                      ))}
                  </div>
              </div>
         )}
         
-        {/* PAGE: GUIA (Dynamic) */}
+        {/* PAGE: GUIA (Dynamic List) */}
         {currentPage === 'guia' && (
              <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
                  <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
                      <h1 className="text-3xl font-bold mb-6 text-blue-400 flex items-center gap-3">
-                         <Book className="text-violet-400" /> Guía de Estudios
+                         <Book className="text-violet-400" /> Índice de Contenidos
                      </h1>
                      <div className="space-y-8">
-                         {Object.entries(syllabus).map(([week, days]) => (
-                             <div key={week} className="border-b border-white/10 pb-6 last:border-0">
-                                 <h3 className="text-xl font-bold text-white mb-4">Semana {week}</h3>
+                         {modules.map((module) => (
+                             <div key={module.id} className="border-b border-white/10 pb-6 last:border-0">
+                                 <h3 className="text-xl font-bold text-white mb-4">{module.title}</h3>
                                  <div className="grid gap-3">
-                                     {Object.entries(days).map(([day, info]) => (
-                                         <div key={day} className="bg-slate-800/50 p-4 rounded-lg border-l-4 border-blue-500">
-                                             <div className="text-xs uppercase font-bold text-blue-400 mb-1">{day}</div>
-                                             <div className="font-medium text-white">{info.title}</div>
-                                             <div className="text-sm text-slate-400 mt-1">{info.desc}</div>
+                                     {module.classes.map((cls) => (
+                                         <div key={cls.id} className="bg-slate-800/50 p-4 rounded-lg border-l-4 border-blue-500">
+                                             <div className="font-medium text-white flex justify-between">
+                                                {cls.title}
+                                                <span className="text-xs text-slate-500 bg-black/30 px-2 py-0.5 rounded">{cls.duration}</span>
+                                             </div>
+                                             <div className="text-sm text-slate-400 mt-1">{cls.desc}</div>
                                          </div>
                                      ))}
                                  </div>
@@ -505,7 +443,6 @@ const App = () => {
 
       </main>
 
-      {/* MODAL */}
       {selectedSession && (
           <ClassModal session={selectedSession} onClose={() => setSelectedSession(null)} />
       )}

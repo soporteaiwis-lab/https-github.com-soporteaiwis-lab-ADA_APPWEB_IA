@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
-import { User, SyllabusStructure } from '../types';
-import { DIAS_SEMANA, FIREBASE_CONFIG } from '../constants';
+import { User, CourseModule, ClassSession } from '../types';
+import { FIREBASE_CONFIG } from '../constants';
 import { getCloudStatus, getDbError } from '../services/dataService';
-import { Save, UserPlus, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu } from 'lucide-react';
+import { Save, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu, Plus, Edit, ChevronDown, ChevronRight, Layout, UserPlus } from 'lucide-react';
 
 interface AdminDashboardProps {
     users: User[];
-    syllabus: SyllabusStructure;
+    modules: CourseModule[];
     onUpdateUsers: (users: User[]) => void;
-    onUpdateSyllabus: (syllabus: SyllabusStructure) => void;
+    onUpdateModules: (modules: CourseModule[]) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpdateUsers, onUpdateSyllabus }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdateUsers, onUpdateModules }) => {
     const [activeTab, setActiveTab] = useState<'users' | 'content' | 'database'>('users');
     const [newUserEmail, setNewUserEmail] = useState('');
     const [newUserName, setNewUserName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     
+    // Content Management State
+    const [expandedModule, setExpandedModule] = useState<string | null>(null);
+    const [newModuleTitle, setNewModuleTitle] = useState('');
+
     const isCloudActive = getCloudStatus();
     const dbError = getDbError();
 
@@ -41,7 +45,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
 
     const handleDeleteUser = async (email: string) => {
         if (email === 'AIWIS') return; 
-        if (confirm(`¿Eliminar usuario ${email}? Esta acción se sincronizará con la nube.`)) {
+        if (confirm(`¿Eliminar usuario ${email}?`)) {
             setIsSaving(true);
             await onUpdateUsers(users.filter(u => u.email !== email));
             setIsSaving(false);
@@ -55,17 +59,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
         setIsSaving(false);
     };
 
-    // --- CONTENT MANAGEMENT ---
-    const handleContentChange = (week: string, day: string, field: 'title' | 'desc' | 'videoUrl', value: string) => {
-        const newSyllabus = { ...syllabus };
-        if (!newSyllabus[parseInt(week)]) newSyllabus[parseInt(week)] = {};
-        if (!newSyllabus[parseInt(week)][day]) newSyllabus[parseInt(week)][day] = { title: '', desc: '' };
-        
-        newSyllabus[parseInt(week)][day] = {
-            ...newSyllabus[parseInt(week)][day],
-            [field]: value
+    // --- MODULE MANAGEMENT ---
+    const handleAddModule = () => {
+        if(!newModuleTitle.trim()) return;
+        const newModule: CourseModule = {
+            id: Date.now().toString(),
+            title: newModuleTitle,
+            classes: []
         };
-        onUpdateSyllabus(newSyllabus);
+        onUpdateModules([...modules, newModule]);
+        setNewModuleTitle('');
+    };
+
+    const handleDeleteModule = (moduleId: string) => {
+        if(confirm("¿Eliminar módulo completo y todas sus clases?")) {
+            onUpdateModules(modules.filter(m => m.id !== moduleId));
+        }
+    };
+
+    const handleUpdateModuleTitle = (moduleId: string, newTitle: string) => {
+        const updated = modules.map(m => m.id === moduleId ? { ...m, title: newTitle } : m);
+        onUpdateModules(updated);
+    };
+
+    // --- CLASS MANAGEMENT ---
+    const handleAddClass = (moduleId: string) => {
+        const newClass: ClassSession = {
+            id: Date.now().toString(),
+            title: "Nueva Clase",
+            desc: "",
+            videoUrl: "",
+            duration: "0 min",
+            completed: false
+        };
+        const updated = modules.map(m => {
+            if (m.id === moduleId) {
+                return { ...m, classes: [...m.classes, newClass] };
+            }
+            return m;
+        });
+        onUpdateModules(updated);
+        setExpandedModule(moduleId);
+    };
+
+    const handleDeleteClass = (moduleId: string, classId: string) => {
+        if(!confirm("¿Borrar esta clase?")) return;
+        const updated = modules.map(m => {
+            if (m.id === moduleId) {
+                return { ...m, classes: m.classes.filter(c => c.id !== classId) };
+            }
+            return m;
+        });
+        onUpdateModules(updated);
+    };
+
+    const handleUpdateClass = (moduleId: string, classId: string, field: keyof ClassSession, value: string) => {
+        const updated = modules.map(m => {
+            if (m.id === moduleId) {
+                return {
+                    ...m,
+                    classes: m.classes.map(c => c.id === classId ? { ...c, [field]: value } : c)
+                };
+            }
+            return m;
+        });
+        onUpdateModules(updated);
     };
 
     const safeStringify = (data: any) => {
@@ -78,49 +136,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
 
     return (
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
-            {/* ALERT: DB MISSING OR DISABLED */}
+            {/* ALERT: DB MISSING */}
             {!isCloudActive && dbError === 'missing_db' && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
-                    <Database className="text-red-500 shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-bold text-red-500">Base de Datos "aiwis-bd-ia-portal" No Disponible</h3>
-                        <p className="text-sm text-slate-300 mb-2">
-                            El sistema intenta conectar a la base de datos nombrada <strong>aiwis-bd-ia-portal</strong>, pero falla.
-                        </p>
-                        <ul className="list-disc list-inside text-xs text-slate-400 space-y-2 font-mono bg-black/30 p-3 rounded">
-                            <li><strong>Causa 1 (Status):</strong> La base de datos está "Inhabilitada" en la consola. Debes ir a Firebase Console y hacer clic en "Habilitar" o crearla.</li>
-                            <li><strong>Causa 2 (Config):</strong> El <code>projectId</code> en <code>constants.ts</code> no coincide con el proyecto donde vive esta base de datos.</li>
-                        </ul>
-                    </div>
+                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6">
+                    <h3 className="font-bold text-red-500 flex items-center gap-2"><Database size={18}/> Error: Base de Datos No Encontrada</h3>
+                    <p className="text-sm text-slate-300">Debes crear/habilitar la base de datos <code>aiwis-bd-ia-portal</code> en Firebase.</p>
                 </div>
             )}
 
             {/* ALERT: PERMISSIONS */}
             {!isCloudActive && dbError === 'permission' && (
-                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6 flex items-start gap-4">
-                    <AlertTriangle className="text-amber-500 shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-bold text-amber-500">Permisos Insuficientes en "aiwis-bd-ia-portal"</h3>
-                        <p className="text-sm text-slate-300 mb-2">
-                            La base de datos existe, pero las Reglas de Seguridad bloquean el acceso.
-                        </p>
-                        <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono bg-black/30 p-3 rounded">
-                            <li>Ve a <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline">Firebase Console</a>.</li>
-                            <li>Selecciona el proyecto <strong>AIWIS MENTOR CLASES</strong>.</li>
-                            <li>Ve a <strong>Firestore Database</strong> y selecciona <strong>aiwis-bd-ia-portal</strong> en el menú desplegable (arriba).</li>
-                            <li>Pestaña <strong>Reglas</strong> y pega:</li>
-                        </ol>
-                        <div className="mt-2 text-xs text-emerald-400 bg-black p-2 rounded font-mono select-all">
-                            rules_version = '2';<br/>
-                            service cloud.firestore {'{'}<br/>
-                            &nbsp;&nbsp;match /databases/{"{database}"}/documents {'{'}<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;match /{"{document=**}"} {'{'}<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;{'}'}<br/>
-                            &nbsp;&nbsp;{'}'}<br/>
-                            {'}'}
-                        </div>
-                    </div>
+                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6">
+                     <h3 className="font-bold text-amber-500 flex items-center gap-2"><AlertTriangle size={18}/> Error de Permisos</h3>
+                     <p className="text-sm text-slate-300">Revisa las Reglas de Seguridad en Firebase Console.</p>
                 </div>
             )}
 
@@ -133,31 +161,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                         </h2>
                         <div className="flex items-center gap-2 text-slate-400 text-xs mt-1">
                             {isCloudActive ? (
-                                <>
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                    <span className="text-emerald-400 font-bold">Conectado: aiwis-bd-ia-portal</span>
-                                </>
+                                <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> DB: aiwis-bd-ia-portal</span>
                             ) : (
-                                <>
-                                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                    <span className="text-red-400 font-bold">Sin Conexión Cloud</span>
-                                </>
+                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> Offline</span>
                             )}
-                            {isSaving && <span className="text-slate-500 ml-2 animate-pulse">Guardando...</span>}
                         </div>
                     </div>
                     
-                    {/* Responsive Navigation */}
                     <div className="flex w-full md:w-auto bg-slate-950 p-1 rounded-lg border border-white/10 overflow-hidden">
-                        <button onClick={() => setActiveTab('users')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium transition-all rounded ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>
-                             Usuarios
-                        </button>
-                        <button onClick={() => setActiveTab('content')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium transition-all rounded ${activeTab === 'content' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                             Contenidos
-                        </button>
-                        <button onClick={() => setActiveTab('database')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium transition-all rounded ${activeTab === 'database' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>
-                             IA DB
-                        </button>
+                        <button onClick={() => setActiveTab('users')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>Usuarios</button>
+                        <button onClick={() => setActiveTab('content')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'content' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Módulos & Clases</button>
+                        <button onClick={() => setActiveTab('database')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'database' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>DB Data</button>
                     </div>
                 </div>
 
@@ -173,11 +187,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                     <input value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} className="w-full bg-slate-900 border border-white/20 rounded p-3 text-sm" placeholder="usuario@ada.cl" />
                                 </div>
                                 <div className="w-full md:flex-1">
-                                    <label className="block text-xs text-slate-400 mb-1">Nombre Completo</label>
+                                    <label className="block text-xs text-slate-400 mb-1">Nombre</label>
                                     <input value={newUserName} onChange={e => setNewUserName(e.target.value)} className="w-full bg-slate-900 border border-white/20 rounded p-3 text-sm" placeholder="Juan Pérez" />
                                 </div>
-                                <button type="submit" disabled={isSaving || !isCloudActive} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-3 rounded-lg transition-colors flex items-center justify-center gap-2 font-bold text-sm">
-                                    <Save size={18} /> {isSaving ? 'Guardando...' : 'Agregar Usuario'}
+                                <button type="submit" disabled={isSaving || !isCloudActive} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-bold text-sm">
+                                    <UserPlus size={18} /> Agregar
                                 </button>
                             </form>
 
@@ -200,17 +214,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                                     <select 
                                                         value={user.rol} 
                                                         onChange={(e) => handleRoleChange(user.email, e.target.value)}
-                                                        className="bg-transparent border border-white/20 rounded px-2 py-1 text-xs focus:bg-slate-800 w-full"
+                                                        className="bg-transparent border border-white/20 rounded px-2 py-1 text-xs focus:bg-slate-800"
                                                         disabled={user.email === 'AIWIS' || !isCloudActive}
                                                     >
                                                         <option value="Usuario">Usuario</option>
-                                                        <option value="Mentor AIWIS">Mentor</option>
                                                         <option value="Admin">Admin</option>
                                                     </select>
                                                 </td>
                                                 <td className="p-3 text-right">
                                                     {user.email !== 'AIWIS' && (
-                                                        <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="text-red-400 hover:text-red-300 p-1 disabled:opacity-30">
+                                                        <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="text-red-400 hover:text-red-300 p-1">
                                                             <Trash2 size={16} />
                                                         </button>
                                                     )}
@@ -220,88 +233,104 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                                     </tbody>
                                 </table>
                             </div>
-
-                            <div className="md:hidden space-y-3">
-                                {users.map((user) => (
-                                    <div key={user.email} className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col gap-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <div className="font-bold text-white">{user.nombre}</div>
-                                                <div className="text-xs text-slate-400">{user.email}</div>
-                                            </div>
-                                            {user.email !== 'AIWIS' && (
-                                                <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="bg-red-500/20 text-red-300 p-2 rounded-lg disabled:opacity-30">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
                     )}
 
-                    {/* CONTENT TAB */}
+                    {/* CONTENT TAB (MODULES) */}
                     {activeTab === 'content' && (
-                        <div className="space-y-8">
-                            <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row items-center gap-2 text-center md:text-left">
-                                <Monitor size={20} />
-                                <div>
-                                    <span className="font-bold">Modo Edición en la Nube:</span> {isCloudActive ? 'Activo' : 'Inactivo (Revisa Configuración)'}
-                                </div>
+                        <div className="space-y-6">
+                            {/* Create Module */}
+                            <div className="flex gap-2 mb-6">
+                                <input 
+                                    type="text" 
+                                    value={newModuleTitle}
+                                    onChange={(e) => setNewModuleTitle(e.target.value)}
+                                    placeholder="Nombre del nuevo módulo..."
+                                    className="flex-1 bg-slate-900 border border-white/20 rounded-lg p-3 text-white"
+                                />
+                                <button onClick={handleAddModule} className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-lg font-bold flex items-center gap-2">
+                                    <Layout size={18} /> Crear Módulo
+                                </button>
                             </div>
 
-                            {Object.entries(syllabus).map(([week, days]) => (
-                                <div key={week} className="border border-white/10 rounded-xl overflow-hidden">
-                                    <div className="bg-white/5 p-3 font-bold border-b border-white/10 text-slate-300 flex justify-between items-center">
-                                        <span>Semana {week}</span>
-                                        <span className="text-xs bg-slate-800 px-2 py-1 rounded">Fase 1</span>
+                            {/* Modules List */}
+                            <div className="space-y-4">
+                                {modules.length === 0 && (
+                                    <div className="text-center text-slate-500 py-10 border border-dashed border-white/10 rounded-xl">
+                                        No hay módulos creados. Agrega uno arriba.
                                     </div>
-                                    <div className="divide-y divide-white/10">
-                                        {DIAS_SEMANA.map(day => {
-                                            const dayData = days[day];
-                                            if (!dayData) return null;
-                                            return (
-                                                <div key={day} className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-start hover:bg-white/5 transition-colors group">
-                                                    <div className="md:col-span-1 text-xs font-bold uppercase text-slate-500 pt-3 md:text-center">
-                                                        {day}
-                                                    </div>
-                                                    <div className="md:col-span-4 space-y-2">
-                                                        <input 
-                                                            type="text" 
-                                                            value={dayData.title}
-                                                            onChange={(e) => handleContentChange(week, day, 'title', e.target.value)}
-                                                            className="w-full bg-transparent border-b border-white/10 focus:border-blue-500 outline-none text-white font-medium pb-1 transition-all placeholder:text-slate-600"
-                                                            placeholder="Título de la clase..."
-                                                            disabled={!isCloudActive}
-                                                        />
-                                                        <textarea 
-                                                            value={dayData.desc}
-                                                            onChange={(e) => handleContentChange(week, day, 'desc', e.target.value)}
-                                                            className="w-full bg-slate-900/50 border border-white/10 rounded p-2 text-xs text-slate-400 h-20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-700"
-                                                            placeholder="Descripción del contenido..."
-                                                            disabled={!isCloudActive}
-                                                        />
-                                                    </div>
-                                                    <div className="md:col-span-7">
-                                                        <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-lg p-2 focus-within:border-emerald-500 transition-colors">
-                                                            <Video size={16} className="text-red-500 shrink-0" />
+                                )}
+                                {modules.map(module => (
+                                    <div key={module.id} className="border border-white/10 rounded-xl overflow-hidden bg-white/5">
+                                        <div className="p-4 bg-slate-900 flex justify-between items-center border-b border-white/10">
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <button onClick={() => setExpandedModule(expandedModule === module.id ? null : module.id)}>
+                                                    {expandedModule === module.id ? <ChevronDown size={20} className="text-blue-400" /> : <ChevronRight size={20} />}
+                                                </button>
+                                                <input 
+                                                    value={module.title}
+                                                    onChange={(e) => handleUpdateModuleTitle(module.id, e.target.value)}
+                                                    className="bg-transparent font-bold text-lg text-white outline-none focus:border-b border-blue-500 w-full"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => handleAddClass(module.id)} className="text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3 py-1 bg-emerald-400/10 rounded border border-emerald-400/20 flex items-center gap-1">
+                                                    <Plus size={14} /> Clase
+                                                </button>
+                                                <button onClick={() => handleDeleteModule(module.id)} className="text-red-400 p-2 hover:bg-red-400/10 rounded">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {expandedModule === module.id && (
+                                            <div className="p-4 space-y-4 bg-black/20">
+                                                {module.classes.length === 0 && <div className="text-sm text-slate-500 italic p-2">Sin clases en este módulo.</div>}
+                                                {module.classes.map((cls) => (
+                                                    <div key={cls.id} className="bg-slate-800 border border-white/10 rounded-lg p-4 grid gap-4 relative group">
+                                                        <button 
+                                                            onClick={() => handleDeleteClass(module.id, cls.id)}
+                                                            className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/10 rounded"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                             <input 
-                                                                type="text"
-                                                                value={dayData.videoUrl || ''}
-                                                                onChange={(e) => handleContentChange(week, day, 'videoUrl', e.target.value)}
-                                                                className="flex-1 bg-transparent outline-none text-xs text-slate-300 placeholder:text-slate-600 w-full"
-                                                                placeholder="Pegar URL de YouTube..."
-                                                                disabled={!isCloudActive}
+                                                                value={cls.title}
+                                                                onChange={(e) => handleUpdateClass(module.id, cls.id, 'title', e.target.value)}
+                                                                className="bg-slate-900 border border-white/10 rounded p-2 text-white font-bold text-sm"
+                                                                placeholder="Título de la clase"
+                                                            />
+                                                            <input 
+                                                                value={cls.duration}
+                                                                onChange={(e) => handleUpdateClass(module.id, cls.id, 'duration', e.target.value)}
+                                                                className="bg-slate-900 border border-white/10 rounded p-2 text-slate-300 text-sm"
+                                                                placeholder="Ej: 45 min"
+                                                            />
+                                                        </div>
+                                                        <textarea 
+                                                            value={cls.desc}
+                                                            onChange={(e) => handleUpdateClass(module.id, cls.id, 'desc', e.target.value)}
+                                                            className="bg-slate-900 border border-white/10 rounded p-2 text-slate-400 text-sm h-16"
+                                                            placeholder="Descripción del contenido..."
+                                                        />
+                                                        <div className="flex items-center gap-2">
+                                                            <Video size={16} className="text-red-500" />
+                                                            <input 
+                                                                value={cls.videoUrl || ''}
+                                                                onChange={(e) => handleUpdateClass(module.id, cls.id, 'videoUrl', e.target.value)}
+                                                                className="flex-1 bg-slate-900 border border-white/10 rounded p-2 text-xs text-blue-300"
+                                                                placeholder="https://www.youtube.com/watch?v=..."
                                                             />
                                                         </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -310,20 +339,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, syllabus, onUpda
                         <div className="space-y-6">
                             <div className="bg-gradient-to-r from-emerald-900/40 to-slate-900 border border-emerald-500/30 rounded-xl p-6">
                                 <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                                    <Cpu className="text-emerald-400" /> Firebase Status: aiwis-bd-ia-portal
+                                    <Cpu className="text-emerald-400" /> Firebase Status
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
                                     Estado: {isCloudActive ? <span className="text-emerald-400 font-bold">CONECTADO</span> : <span className="text-red-400 font-bold">DESCONECTADO ({dbError})</span>}
                                 </p>
-                                <div className="p-4 bg-black/50 rounded-lg text-xs font-mono break-all text-slate-500">
-                                    Project Config ID: {FIREBASE_CONFIG.projectId}
-                                </div>
                             </div>
-
                             <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
-                                <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Usuarios</h4>
+                                <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Módulos (JSON)</h4>
                                 <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
-                                    {isCloudActive ? safeStringify(users) : "Conecta a la nube para ver datos reales."}
+                                    {isCloudActive ? safeStringify(modules) : "Offline"}
                                 </div>
                             </div>
                         </div>
