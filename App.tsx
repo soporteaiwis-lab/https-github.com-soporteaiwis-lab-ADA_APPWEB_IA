@@ -8,14 +8,15 @@ import {
   saveModulesToCloud,
   extractVideoId,
   syncProgress, 
-  loadLocalProgress
+  loadLocalProgress,
+  getDbError
 } from './services/dataService';
 import { generateSmartReport } from './services/geminiService';
 import Navbar from './components/Navbar';
 import ClassCarousel from './components/ClassCarousel';
 import ClassModal from './components/ClassModal';
 import AdminDashboard from './components/AdminDashboard';
-import { Book, Lightbulb, TrendingUp, Sparkles, Lock, Shield, Loader2 } from 'lucide-react';
+import { Book, Lightbulb, TrendingUp, Sparkles, Lock, Shield, Loader2, AlertTriangle } from 'lucide-react';
 
 const App = () => {
   // State
@@ -177,6 +178,10 @@ const App = () => {
       }));
   };
 
+  // Check errors for UI
+  const dbError = getDbError();
+  const hasDbError = dbError !== 'none';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white flex-col gap-4">
@@ -205,6 +210,20 @@ const App = () => {
             </h1>
             <p className="text-slate-400 mt-2">Acceso Corporativo Seguro</p>
           </div>
+          
+          {hasDbError && (
+              <div className="bg-amber-500/10 border border-amber-500/50 p-4 rounded-xl mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                  <AlertTriangle className="text-amber-500 shrink-0 mt-1" size={20} />
+                  <div className="text-left">
+                      <h4 className="font-bold text-amber-500 text-sm mb-1">
+                          {dbError === 'api_disabled' ? 'Base de Datos no Creada' : 'Error de Conexión/Permisos'}
+                      </h4>
+                      <p className="text-xs text-amber-200/80 leading-relaxed">
+                          No se pudo conectar con Firebase. Usa el usuario <strong>Master Root</strong> para entrar y ver las instrucciones de reparación.
+                      </p>
+                  </div>
+              </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>

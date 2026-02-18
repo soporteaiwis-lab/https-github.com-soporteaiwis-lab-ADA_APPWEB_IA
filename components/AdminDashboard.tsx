@@ -155,7 +155,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
                      <button onClick={() => setShowRules(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><Eye size={16}/></button>
                      <h3 className="text-xl font-bold text-blue-400 flex items-center gap-2 mb-3">
                          {isApiDisabled ? <Server size={24}/> : <ShieldCheck size={24}/>} 
-                         Diagnóstico: {isApiDisabled ? 'Base de Datos No Creada' : hasNetworkError ? 'Conexión / Reglas' : 'Reglas de Seguridad'}
+                         Diagnóstico: {isApiDisabled ? 'Base de Datos No Creada' : 'Configuración de Seguridad Requerida'}
                      </h3>
                      
                      {isApiDisabled ? (
@@ -174,9 +174,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
                          </div>
                      ) : (
                          <p className="text-slate-300 mb-4">
-                            {hasNetworkError 
-                                ? "Error de conexión detectado. A menudo esto ocurre porque Firebase bloquea el acceso. Aplica estas reglas para solucionar:" 
-                                : "Firebase está bloqueando la escritura de datos. Copia esto en tu consola:"}
+                            Firebase está bloqueando la conexión. Esto sucede cuando las <strong>Reglas de Seguridad</strong> no están configuradas para acceso público de desarrollo.
+                            <br/><br/>
+                            <span className="text-amber-400">Solución:</span> Copia el siguiente código y pégalo en la pestaña <strong>Rules</strong> de tu Firestore Database.
                          </p>
                      )}
                      
@@ -211,7 +211,7 @@ service cloud.firestore {'{'}
                             ) : isCloudActive ? (
                                 <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> ONLINE</span>
                             ) : (
-                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> ERROR</span>
+                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> OFFLINE</span>
                             )}
                         </div>
                     </div>

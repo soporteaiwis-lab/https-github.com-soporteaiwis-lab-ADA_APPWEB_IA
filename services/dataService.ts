@@ -22,9 +22,6 @@ try {
     console.log("✅ Firebase SDK Inicializado Correctamente");
 } catch (e: any) {
     console.error("❌ Error Init Firebase:", e);
-    // Si falla 'Service firestore is not available', suele ser mismatch de versiones.
-    // Al usar initializeApp de 'firebase/app' (gstatic) y getFirestore de 'firebase/firestore' (gstatic),
-    // aseguramos compatibilidad.
     dbErrorType = 'init_failed';
 }
 
@@ -38,6 +35,25 @@ export const extractVideoId = (url: string | undefined): string | undefined => {
 
 export const getCloudStatus = () => isFirebaseReady;
 export const getDbError = () => dbErrorType;
+
+// Helper: Timeout Wrapper to prevent infinite hanging on permission issues
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error("TIMEOUT_FIREBASE"));
+        }, ms);
+
+        promise
+            .then((res) => {
+                clearTimeout(timer);
+                resolve(res);
+            })
+            .catch((err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
+};
 
 // --- MASTER USER (Always available in memory) ---
 const MASTER_USER: User = {
@@ -57,7 +73,6 @@ function handleFirebaseError(error: any) {
     // 1. API Disabled / DB Not Created
     if (msg.includes('API has not been used') || msg.includes('is disabled') || msg.includes('Project has not yet been configured')) {
         dbErrorType = 'api_disabled';
-        console.warn("⚠️ API NO HABILITADA: Debes crear la base de datos en Firebase Console.");
         return;
     }
 
@@ -66,9 +81,9 @@ function handleFirebaseError(error: any) {
 
     if (msg.includes('permission-denied') || msg.includes('Missing or insufficient permissions')) {
         dbErrorType = 'permission';
-        console.warn("⚠️ PERMISO DENEGADO: Necesitas actualizar las Reglas en Firebase Console.");
-    } else if (msg.includes('offline') || msg.includes('network') || msg.includes('connection')) {
-        dbErrorType = 'network';
+    } else if (msg.includes('offline') || msg.includes('network') || msg.includes('connection') || msg.includes('client is offline')) {
+        // En arranque inicial, "offline" casi siempre es por bloqueo de permisos que impide el handshake
+        dbErrorType = 'permission'; // Forzamos 'permission' para mostrar las reglas en UI
     } else {
         dbErrorType = 'unknown';
     }
@@ -85,7 +100,8 @@ export const getStoredUsers = async (): Promise<User[]> => {
 
     try {
         const docRef = doc(db, "ada_portal", "users");
-        const docSnap = await getDoc(docRef);
+        // Timeout corto (1.2s) para no hacer esperar al usuario si fallan los permisos
+        const docSnap = await withTimeout(getDoc(docRef), 1200) as any;
 
         if (docSnap.exists()) {
             dbErrorType = 'none';
@@ -95,8 +111,13 @@ export const getStoredUsers = async (): Promise<User[]> => {
             return [MASTER_USER];
         }
     } catch (error: any) {
-        handleFirebaseError(error);
-        // En caso de error (ej. permisos), devolvemos Master para permitir login y fix
+        if (error.message === 'TIMEOUT_FIREBASE') {
+             console.warn("⏱️ Firebase Timeout: Posible bloqueo de permisos.");
+             if(dbErrorType === 'none') dbErrorType = 'permission'; // Asumimos permisos si hay timeout
+        } else {
+            handleFirebaseError(error);
+        }
+        // Fallback seguro
         return [MASTER_USER];
     }
 };
@@ -106,14 +127,15 @@ export const getStoredModules = async (): Promise<CourseModule[]> => {
 
     try {
         const docRef = doc(db, "ada_portal", "modules");
-        const docSnap = await getDoc(docRef);
+        // Timeout corto
+        const docSnap = await withTimeout(getDoc(docRef), 1200) as any;
 
         if (docSnap.exists()) {
             return docSnap.data().list as CourseModule[];
         }
         return INITIAL_MODULES;
     } catch (error: any) {
-        handleFirebaseError(error);
+        // No necesitamos setear el error global aquí de nuevo si ya lo hizo getUsers
         return INITIAL_MODULES;
     }
 };
@@ -130,7 +152,7 @@ export const saveUsersToCloud = async (users: User[]): Promise<boolean> => {
         return true;
     } catch (error: any) {
         handleFirebaseError(error);
-        alert(`❌ ERROR AL GUARDAR: ${error.message}\n\nRevisa el panel de Admin > Botón 🛠️ para ver las instrucciones.`);
+        alert(`❌ ERROR AL GUARDAR: ${error.message}\n\nRevisa el panel de Admin > Diagnóstico.`);
         return false;
     }
 };
@@ -147,7 +169,7 @@ export const saveModulesToCloud = async (modules: CourseModule[]): Promise<boole
         return true;
     } catch (error: any) {
         handleFirebaseError(error);
-        alert(`❌ ERROR AL GUARDAR: ${error.message}\n\nRevisa el panel de Admin > Botón 🛠️ para ver las instrucciones.`);
+        alert(`❌ ERROR AL GUARDAR: ${error.message}\n\nRevisa el panel de Admin > Diagnóstico.`);
         return false;
     }
 };
@@ -166,7 +188,8 @@ export const loadLocalProgress = async (email: string): Promise<Record<string, b
     if (!db) return {};
     try {
          const docRef = doc(db, "ada_portal", `progress_${email.replace(/\./g, '_')}`);
-         const docSnap = await getDoc(docRef);
+         // Timeout muy corto para progreso
+         const docSnap = await withTimeout(getDoc(docRef), 1000) as any;
          if (docSnap.exists()) {
              return docSnap.data().map || {};
          }
