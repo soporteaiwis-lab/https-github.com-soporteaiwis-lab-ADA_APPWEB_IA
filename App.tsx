@@ -2,15 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { User, ClassSession, PageView, Idea, SyllabusStructure } from './types';
 import { DIAS_SEMANA } from './constants';
 import { 
-  fetchUsers, 
-  fetchVideoUrls, 
-  syncProgress, 
-  loadLocalProgress, 
-  extractVideoId,
-  saveUsersToDB,
-  saveSyllabusToDB,
+  getStoredUsers,
   getStoredSyllabus,
-  getStoredUsers
+  saveUsersToCloud,
+  saveSyllabusToCloud,
+  extractVideoId,
+  syncProgress, 
+  loadLocalProgress
 } from './services/dataService';
 import { generateSmartReport } from './services/geminiService';
 import Navbar from './components/Navbar';
@@ -39,15 +37,16 @@ const App = () => {
   // Initial Data Load
   useEffect(() => {
     const init = async () => {
-      // Load Database from "Cloud/Local"
-      const fetchedUsers = getStoredUsers();
-      const fetchedSyllabus = getStoredSyllabus();
+      // Load Database from Cloud (Google Sheets via Apps Script)
+      // This waits for the fetch to complete to ensure data truth
+      const [fetchedUsers, fetchedSyllabus] = await Promise.all([
+          getStoredUsers(),
+          getStoredSyllabus()
+      ]);
       
       setUsers(fetchedUsers);
       setSyllabus(fetchedSyllabus);
       
-      // We still try to fetch initial video map, but the source of truth is now the Syllabus state
-      // We construct the map from the syllabus for backward compatibility with the carousel component
       const vMap: Record<string, string> = {};
       Object.entries(fetchedSyllabus).forEach(([week, days]) => {
           Object.entries(days).forEach(([day, data]) => {
@@ -60,7 +59,6 @@ const App = () => {
       const savedUser = localStorage.getItem('ada_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
-        // Refresh user data from DB in case admin changed it
         const freshUser = fetchedUsers.find(u => u.email === parsed.email) || parsed;
         setCurrentUser(freshUser);
         
@@ -122,15 +120,15 @@ const App = () => {
     setCurrentPage('inicio');
   };
 
-  // ADMIN UPDATES
-  const handleUpdateUsers = (newUsers: User[]) => {
+  // ADMIN UPDATES - Now calls Cloud functions
+  const handleUpdateUsers = async (newUsers: User[]) => {
       setUsers(newUsers);
-      saveUsersToDB(newUsers); // Persist
+      await saveUsersToCloud(newUsers); 
   };
 
-  const handleUpdateSyllabus = (newSyllabus: SyllabusStructure) => {
+  const handleUpdateSyllabus = async (newSyllabus: SyllabusStructure) => {
       setSyllabus(newSyllabus);
-      saveSyllabusToDB(newSyllabus); // Persist
+      await saveSyllabusToCloud(newSyllabus);
       
       // Rebuild video map for UI
       const vMap: Record<string, string> = {};
@@ -210,8 +208,12 @@ const App = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-        <Loader2 className="animate-spin mr-2" /> Iniciando Base de Datos ADA...
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white flex-col gap-4">
+        <Loader2 className="animate-spin w-10 h-10 text-blue-500" /> 
+        <div className="text-center">
+            <h2 className="text-xl font-bold">Conectando con Google Cloud...</h2>
+            <p className="text-slate-400 text-sm">Sincronizando Base de Datos Maestra</p>
+        </div>
       </div>
     );
   }
