@@ -48,8 +48,9 @@ const MASTER_USER: User = {
 };
 
 // --- LOCAL STORAGE HELPERS (FALLBACK) ---
-const LOCAL_USERS_KEY = 'ada_users_backup';
-const LOCAL_SYLLABUS_KEY = 'ada_syllabus_backup';
+// Changed keys to v2 to force a clean slate (ignoring old data)
+const LOCAL_USERS_KEY = 'ada_users_v2_clean';
+const LOCAL_SYLLABUS_KEY = 'ada_syllabus_v2_clean';
 
 const getLocalUsers = (): User[] => {
     const saved = localStorage.getItem(LOCAL_USERS_KEY);
