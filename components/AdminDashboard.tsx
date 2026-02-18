@@ -161,20 +161,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
                      {isApiDisabled ? (
                          <div className="space-y-3">
                              <p className="text-slate-300">
-                                ⛔ <strong>La base de datos Firestore no existe.</strong> El proyecto está configurado pero el servicio no está activo.
+                                ⛔ <strong>La base de datos Firestore no existe.</strong> El error <code>API has not been used</code> indica que no se ha inicializado el servicio.
                              </p>
                              <ol className="list-decimal list-inside text-sm text-slate-400 bg-black/30 p-4 rounded-lg space-y-2">
                                  <li>Ve a <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline font-bold">Firebase Console</a>.</li>
-                                 <li>Entra a tu proyecto <strong>{FIREBASE_CONFIG.projectId}</strong>.</li>
-                                 <li>En el menú izquierdo, busca <strong>Build</strong> y luego <strong>Firestore Database</strong>.</li>
+                                 <li>Selecciona tu proyecto: <strong>{FIREBASE_CONFIG.projectId}</strong>.</li>
+                                 <li>En el menú izquierdo (sección Build), haz clic en <strong>Firestore Database</strong>.</li>
                                  <li>Haz clic en el botón <strong>Create Database</strong>.</li>
-                                 <li>Selecciona una ubicación (ej. <strong>us-central1</strong>).</li>
-                                 <li>Una vez creada, copia las reglas de abajo y pégalas en la pestaña "Rules".</li>
+                                 <li>Selecciona una ubicación (ej. <strong>us-central1</strong>) y modo <strong>Production</strong>.</li>
+                                 <li>Una vez creada, ve a la pestaña <strong>Rules</strong> y pega las reglas de abajo.</li>
                              </ol>
                          </div>
                      ) : (
                          <p className="text-slate-300 mb-4">
-                            Firebase está bloqueando la conexión. Esto sucede cuando las <strong>Reglas de Seguridad</strong> no están configuradas para acceso público de desarrollo.
+                            Firebase está bloqueando la conexión. Esto sucede cuando las <strong>Reglas de Seguridad</strong> no están configuradas para permitir el acceso.
                             <br/><br/>
                             <span className="text-amber-400">Solución:</span> Copia el siguiente código y pégalo en la pestaña <strong>Rules</strong> de tu Firestore Database.
                          </p>

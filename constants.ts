@@ -32,9 +32,9 @@ const apiKey = getEnvVar('REACT_APP_FIREBASE_API_KEY', 'VITE_FIREBASE_API_KEY') 
 
 export const FIREBASE_CONFIG = {
   apiKey: apiKey,
-  authDomain: "aiwis-mentor-clases.firebaseapp.com",
-  projectId: "aiwis-mentor-clases", 
-  storageBucket: "aiwis-mentor-clases.firebasestorage.app",
+  authDomain: "portal-ada-ia.firebaseapp.com", // Updated to match error log
+  projectId: "portal-ada-ia",                // Updated to match error log
+  storageBucket: "portal-ada-ia.firebasestorage.app",
   messagingSenderId: "TU_SENDER_ID",
   appId: "TU_APP_ID"
 };
