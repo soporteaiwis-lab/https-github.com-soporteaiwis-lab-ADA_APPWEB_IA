@@ -36,7 +36,7 @@ const App = () => {
   // Initial Data Load
   useEffect(() => {
     const init = async () => {
-      // Load Database from Cloud (Firebase)
+      // Load Database from Cloud (Firebase) - Cloud Only!
       const [fetchedUsers, fetchedModules] = await Promise.all([
           getStoredUsers(),
           getStoredModules()
@@ -45,18 +45,31 @@ const App = () => {
       setUsers(fetchedUsers);
       setModules(fetchedModules);
       
-      const savedUser = localStorage.getItem('ada_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        const freshUser = fetchedUsers.find(u => u.email === parsed.email) || parsed;
-        setCurrentUser(freshUser);
-        
-        const savedProgress = await loadLocalProgress(parsed.email);
-        setProgressMap(savedProgress);
-        
-        const savedIdeas = localStorage.getItem(`ada_ideas_${parsed.email}`);
-        if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
+      // Auto-relogin if session token exists
+      const savedUserSession = localStorage.getItem('ada_user');
+      if (savedUserSession) {
+        try {
+            const parsed = JSON.parse(savedUserSession);
+            // Verify if user still exists in DB
+            const freshUser = fetchedUsers.find(u => u.email === parsed.email);
+            
+            if (freshUser) {
+                setCurrentUser(freshUser);
+                const savedProgress = await loadLocalProgress(parsed.email);
+                setProgressMap(savedProgress);
+            } else if (parsed.email === 'AIWIS') {
+                // Keep Master session valid even if DB read fails (to fix things)
+                setCurrentUser(parsed);
+            }
+        } catch(e) {
+            localStorage.removeItem('ada_user');
+        }
       }
+      
+      // Ideas are local only for now (Personal Drafts)
+      const savedIdeas = localStorage.getItem('ada_user_ideas_drafts');
+      if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
+      
       setLoading(false);
     };
     init();
@@ -82,9 +95,6 @@ const App = () => {
       const savedProgress = await loadLocalProgress(user.email);
       setProgressMap(savedProgress);
       
-      const savedIdeas = localStorage.getItem(`ada_ideas_${user.email}`);
-      if(savedIdeas) setUserIdeas(JSON.parse(savedIdeas));
-      
       if (user.email === 'AIWIS') {
           setCurrentPage('admin');
       }
@@ -106,15 +116,15 @@ const App = () => {
     setCurrentPage('inicio');
   };
 
-  // ADMIN UPDATES
+  // ADMIN UPDATES - DIRECT TO CLOUD
   const handleUpdateUsers = async (newUsers: User[]) => {
-      setUsers(newUsers);
-      await saveUsersToCloud(newUsers); 
+      const success = await saveUsersToCloud(newUsers); 
+      if (success) setUsers(newUsers);
   };
 
   const handleUpdateModules = async (newModules: CourseModule[]) => {
-      setModules(newModules);
-      await saveModulesToCloud(newModules);
+      const success = await saveModulesToCloud(newModules);
+      if (success) setModules(newModules);
   };
 
   const toggleProgress = async (sessionId: string, status: boolean) => {
@@ -129,7 +139,8 @@ const App = () => {
       const newIdea: Idea = { id: Date.now(), type, text, timestamp: Date.now() };
       const newIdeas = [...userIdeas, newIdea];
       setUserIdeas(newIdeas);
-      localStorage.setItem(`ada_ideas_${currentUser.email}`, JSON.stringify(newIdeas));
+      // Ideas are local drafts
+      localStorage.setItem('ada_user_ideas_drafts', JSON.stringify(newIdeas));
   };
 
   const handleReportGen = async () => {
@@ -172,7 +183,7 @@ const App = () => {
         <Loader2 className="animate-spin w-10 h-10 text-blue-500" /> 
         <div className="text-center">
             <h2 className="text-xl font-bold">Conectando Portal ADA IA...</h2>
-            <p className="text-slate-400 text-sm">Cargando base de datos 'aiwis-bd-ia-portal'</p>
+            <p className="text-slate-400 text-sm">Sincronizando con Google Cloud Firestore</p>
         </div>
       </div>
     );
@@ -314,7 +325,7 @@ const App = () => {
                     
                     <div className="flex-1 overflow-y-auto max-h-[200px] mb-4 space-y-2 pr-2 custom-scrollbar">
                         {userIdeas.length === 0 ? (
-                            <p className="text-slate-500 text-center py-4 text-sm italic">No has agregado ideas aún.</p>
+                            <p className="text-slate-500 text-center py-4 text-sm italic">No has agregado ideas aún (Borradores Locales).</p>
                         ) : (
                             userIdeas.map(idea => (
                                 <div key={idea.id} className={`p-3 rounded-lg text-sm border-l-4 ${idea.type === 'idea' ? 'bg-blue-900/20 border-blue-500' : 'bg-amber-900/20 border-amber-500'}`}>
@@ -373,7 +384,7 @@ const App = () => {
                 {modules.length === 0 ? (
                     <div className="text-center py-20 text-slate-500">
                         <div className="text-4xl mb-2">📂</div>
-                        <p>No hay módulos disponibles.</p>
+                        <p>No hay módulos disponibles en la nube.</p>
                         <p className="text-xs">El administrador debe crear contenido.</p>
                     </div>
                 ) : (

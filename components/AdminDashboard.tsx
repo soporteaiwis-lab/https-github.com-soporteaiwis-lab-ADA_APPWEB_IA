@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { User, CourseModule, ClassSession } from '../types';
 import { FIREBASE_CONFIG } from '../constants';
 import { getCloudStatus, getDbError } from '../services/dataService';
-import { Save, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu, Plus, Edit, ChevronDown, ChevronRight, Layout, UserPlus, Lock, RefreshCw } from 'lucide-react';
+import { Save, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu, Plus, Edit, ChevronDown, ChevronRight, Layout, UserPlus, Lock, RefreshCw, Eye, Server } from 'lucide-react';
 
 interface AdminDashboardProps {
     users: User[];
@@ -22,8 +22,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
     const [newModuleTitle, setNewModuleTitle] = useState('');
 
+    // Diagnostics
     const isCloudActive = getCloudStatus();
     const dbError = getDbError();
+    const hasPermissionError = dbError === 'permission';
+    const hasNetworkError = dbError === 'network';
+    const isApiDisabled = dbError === 'api_disabled';
+    
+    // SHOW RULES AUTOMATICALLY IF THERE IS ANY ERROR
+    const [showRules, setShowRules] = useState(dbError !== 'none');
 
     const handleRetry = () => {
         window.location.reload();
@@ -143,33 +150,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
             {/* --- CRITICAL ERRORS --- */}
             
-            {/* 1. API KEY BLOCKED */}
-            {!isCloudActive && (dbError === 'blocked_key' || !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("TU_API_KEY")) && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-6 mb-6">
-                    <h3 className="text-xl font-bold text-red-500 flex items-center gap-2 mb-3"><Lock size={24}/> API Key Bloqueada o Inválida</h3>
-                    <p className="text-slate-300 mb-4">Google ha bloqueado tu clave. Esto pasa cuando la subes a GitHub públicamente. Sigue estos pasos para arreglarlo:</p>
-                    <div className="bg-black/40 p-4 rounded-lg text-sm text-slate-300 font-mono space-y-3 border border-red-500/20">
-                        <p className="text-emerald-400 font-bold">SOLUCIÓN:</p>
-                        <p>1. Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-blue-400 underline">Google Cloud Console &gt; Credenciales</a>.</p>
-                        <p>2. ELIMINA la clave API actual (la que está en rojo/bloqueada).</p>
-                        <p>3. Crea una NUEVA Clave de API.</p>
-                        <p>4. Haz clic en la nueva clave y busca "Restricciones de sitios web".</p>
-                        <p>5. Agrega: <code>localhost</code> y <code>*.run.app</code> (o tu dominio actual).</p>
-                        <p>6. Guarda la clave.</p>
-                        <p>7. En tu proyecto local, crea un archivo <code>.env</code> y pega: <br/><span className="text-amber-400">REACT_APP_FIREBASE_API_KEY=tu_clave_nueva_aqui</span></p>
-                    </div>
-                </div>
-            )}
-
-            {/* 2. PERMISSIONS (RULES) */}
-            {!isCloudActive && dbError === 'permission' && (
-                <div className="bg-blue-600/10 border border-blue-500/50 rounded-xl p-6 mb-6">
-                     <h3 className="text-xl font-bold text-blue-400 flex items-center gap-2 mb-3"><ShieldCheck size={24}/> ERROR: Acceso Denegado (Reglas)</h3>
-                     <p className="text-slate-300 mb-4">Tu base de datos funciona, pero las Reglas de Seguridad rechazan la conexión.</p>
+            {(hasPermissionError || hasNetworkError || isApiDisabled || showRules) && (
+                <div className="bg-blue-600/10 border border-blue-500/50 rounded-xl p-6 mb-6 relative">
+                     <button onClick={() => setShowRules(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><Eye size={16}/></button>
+                     <h3 className="text-xl font-bold text-blue-400 flex items-center gap-2 mb-3">
+                         {isApiDisabled ? <Server size={24}/> : <ShieldCheck size={24}/>} 
+                         Diagnóstico: {isApiDisabled ? 'Base de Datos No Creada' : hasNetworkError ? 'Conexión / Reglas' : 'Reglas de Seguridad'}
+                     </h3>
                      
-                     <div className="bg-black/50 p-4 rounded-lg border border-blue-500/30">
-                        <p className="text-sm text-slate-400 mb-2">Copia y pega esto exactamente en <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline">Firebase Console &gt; Firestore &gt; Reglas</a>:</p>
-                        <pre className="text-xs text-emerald-400 font-mono bg-black p-3 rounded select-all border border-white/10">
+                     {isApiDisabled ? (
+                         <div className="space-y-3">
+                             <p className="text-slate-300">
+                                ⛔ <strong>La base de datos Firestore no existe.</strong> El proyecto está configurado pero el servicio no está activo.
+                             </p>
+                             <ol className="list-decimal list-inside text-sm text-slate-400 bg-black/30 p-4 rounded-lg space-y-2">
+                                 <li>Ve a <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline font-bold">Firebase Console</a>.</li>
+                                 <li>Entra a tu proyecto <strong>{FIREBASE_CONFIG.projectId}</strong>.</li>
+                                 <li>En el menú izquierdo, busca <strong>Build</strong> y luego <strong>Firestore Database</strong>.</li>
+                                 <li>Haz clic en el botón <strong>Create Database</strong>.</li>
+                                 <li>Selecciona una ubicación (ej. <strong>us-central1</strong>).</li>
+                                 <li>Una vez creada, copia las reglas de abajo y pégalas en la pestaña "Rules".</li>
+                             </ol>
+                         </div>
+                     ) : (
+                         <p className="text-slate-300 mb-4">
+                            {hasNetworkError 
+                                ? "Error de conexión detectado. A menudo esto ocurre porque Firebase bloquea el acceso. Aplica estas reglas para solucionar:" 
+                                : "Firebase está bloqueando la escritura de datos. Copia esto en tu consola:"}
+                         </p>
+                     )}
+                     
+                     <div className="bg-black/50 p-4 rounded-lg border border-blue-500/30 mt-4">
+                        <p className="text-sm text-slate-400 mb-2">Reglas de Seguridad (Copiar en Pestaña 'Rules'):</p>
+                        <pre className="text-xs text-emerald-400 font-mono bg-black p-3 rounded select-all border border-white/10 whitespace-pre-wrap">
 rules_version = '2';
 service cloud.firestore {'{'}
   match /databases/{'{'}database{'}'}/documents {'{'}
@@ -179,19 +192,7 @@ service cloud.firestore {'{'}
   {'}'}
 {'}'}
                         </pre>
-                        <p className="text-xs text-amber-500 mt-2">* Esto abre la DB para que la app funcione sin autenticación de Firebase Auth (usando tu auth personalizada).</p>
                      </div>
-                </div>
-            )}
-
-             {/* 3. DB NOT FOUND */}
-             {!isCloudActive && dbError === 'missing_db' && (
-                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-6 mb-6">
-                    <h3 className="text-xl font-bold text-amber-500 flex items-center gap-2 mb-3"><Database size={24}/> Base de Datos No Encontrada</h3>
-                    <p className="text-slate-300 mb-2">El sistema busca una DB llamada <strong>aiwis-bd-ia-portal</strong> pero no existe o está inhabilitada.</p>
-                    <div className="bg-black/30 p-3 rounded text-sm text-slate-400">
-                        Ve a Firebase Console &gt; Firestore Database. Asegúrate de que la base de datos (default) o la nombrada esté creada y activa.
-                    </div>
                 </div>
             )}
 
@@ -202,11 +203,15 @@ service cloud.firestore {'{'}
                         <h2 className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400 flex items-center justify-center md:justify-start gap-2">
                             <ShieldCheck className="text-violet-400" /> Panel Master Root
                         </h2>
-                        <div className="flex items-center gap-2 text-slate-400 text-xs mt-1">
-                            {isCloudActive ? (
-                                <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> ONLINE: aiwis-bd-ia-portal</span>
+                        <div className="flex items-center gap-2 text-slate-400 text-xs mt-1 justify-center md:justify-start">
+                            {isApiDisabled ? (
+                                <span className="text-pink-500 font-bold flex items-center gap-1">🚫 API NO CREADA</span>
+                            ) : hasPermissionError ? (
+                                <span className="text-amber-500 font-bold flex items-center gap-1">⚠️ ERROR DE PERMISOS</span>
+                            ) : isCloudActive ? (
+                                <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> ONLINE</span>
                             ) : (
-                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> OFFLINE ({dbError})</span>
+                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> ERROR</span>
                             )}
                         </div>
                     </div>
@@ -217,7 +222,10 @@ service cloud.firestore {'{'}
                             <button onClick={() => setActiveTab('content')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'content' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Módulos</button>
                             <button onClick={() => setActiveTab('database')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'database' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>DB</button>
                         </div>
-                        <button onClick={handleRetry} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Recargar / Reintentar">
+                        <button onClick={() => setShowRules(!showRules)} className="p-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/50 rounded-lg" title="Ver Diagnóstico DB">
+                            {isApiDisabled ? <Server size={18}/> : <ShieldCheck size={18} />}
+                        </button>
+                        <button onClick={handleRetry} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Recargar">
                             <RefreshCw size={18} />
                         </button>
                     </div>
@@ -238,7 +246,7 @@ service cloud.firestore {'{'}
                                     <label className="block text-xs text-slate-400 mb-1">Nombre</label>
                                     <input value={newUserName} onChange={e => setNewUserName(e.target.value)} className="w-full bg-slate-900 border border-white/20 rounded p-3 text-sm" placeholder="Juan Pérez" />
                                 </div>
-                                <button type="submit" disabled={isSaving || !isCloudActive} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-bold text-sm">
+                                <button type="submit" disabled={isSaving} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-bold text-sm">
                                     <UserPlus size={18} /> Agregar
                                 </button>
                             </form>
@@ -263,7 +271,7 @@ service cloud.firestore {'{'}
                                                         value={user.rol} 
                                                         onChange={(e) => handleRoleChange(user.email, e.target.value)}
                                                         className="bg-transparent border border-white/20 rounded px-2 py-1 text-xs focus:bg-slate-800"
-                                                        disabled={user.email === 'AIWIS' || !isCloudActive}
+                                                        disabled={user.email === 'AIWIS'}
                                                     >
                                                         <option value="Usuario">Usuario</option>
                                                         <option value="Admin">Admin</option>
@@ -271,7 +279,7 @@ service cloud.firestore {'{'}
                                                 </td>
                                                 <td className="p-3 text-right">
                                                     {user.email !== 'AIWIS' && (
-                                                        <button onClick={() => handleDeleteUser(user.email)} disabled={!isCloudActive} className="text-red-400 hover:text-red-300 p-1">
+                                                        <button onClick={() => handleDeleteUser(user.email)} className="text-red-400 hover:text-red-300 p-1">
                                                             <Trash2 size={16} />
                                                         </button>
                                                     )}
@@ -394,9 +402,9 @@ service cloud.firestore {'{'}
                                 </p>
                             </div>
                             <div className="bg-slate-900 border border-white/10 rounded-xl p-4">
-                                <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Módulos (JSON)</h4>
+                                <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2"><Database size={16}/> Schema: Módulos (Cloud Data)</h4>
                                 <div className="font-mono text-xs text-slate-500 bg-black p-4 rounded-lg overflow-x-auto max-h-64 custom-scrollbar">
-                                    {isCloudActive ? safeStringify(modules) : "Offline"}
+                                    {isCloudActive ? safeStringify(modules) : "No hay datos cargados."}
                                 </div>
                             </div>
                         </div>
