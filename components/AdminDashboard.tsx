@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { User, CourseModule, ClassSession } from '../types';
 import { FIREBASE_CONFIG } from '../constants';
 import { getCloudStatus, getDbError } from '../services/dataService';
-import { Save, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu, Plus, Edit, ChevronDown, ChevronRight, Layout, UserPlus } from 'lucide-react';
+import { Save, Trash2, Database, Video, Monitor, AlertTriangle, ShieldCheck, Cpu, Plus, Edit, ChevronDown, ChevronRight, Layout, UserPlus, Lock, RefreshCw } from 'lucide-react';
 
 interface AdminDashboardProps {
     users: User[];
@@ -23,6 +24,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
 
     const isCloudActive = getCloudStatus();
     const dbError = getDbError();
+
+    const handleRetry = () => {
+        window.location.reload();
+    };
 
     // --- USER MANAGEMENT ---
     const handleAddUser = async (e: React.FormEvent) => {
@@ -136,19 +141,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
 
     return (
         <div className="animate-in fade-in zoom-in duration-300 pb-20">
-            {/* ALERT: DB MISSING */}
-            {!isCloudActive && dbError === 'missing_db' && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6">
-                    <h3 className="font-bold text-red-500 flex items-center gap-2"><Database size={18}/> Error: Base de Datos No Encontrada</h3>
-                    <p className="text-sm text-slate-300">Debes crear/habilitar la base de datos <code>aiwis-bd-ia-portal</code> en Firebase.</p>
+            {/* --- CRITICAL ERRORS --- */}
+            
+            {/* 1. API KEY BLOCKED */}
+            {!isCloudActive && (dbError === 'blocked_key' || !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("TU_API_KEY")) && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-6 mb-6">
+                    <h3 className="text-xl font-bold text-red-500 flex items-center gap-2 mb-3"><Lock size={24}/> API Key Bloqueada o Inválida</h3>
+                    <p className="text-slate-300 mb-4">Google ha bloqueado tu clave. Esto pasa cuando la subes a GitHub públicamente. Sigue estos pasos para arreglarlo:</p>
+                    <div className="bg-black/40 p-4 rounded-lg text-sm text-slate-300 font-mono space-y-3 border border-red-500/20">
+                        <p className="text-emerald-400 font-bold">SOLUCIÓN:</p>
+                        <p>1. Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-blue-400 underline">Google Cloud Console &gt; Credenciales</a>.</p>
+                        <p>2. ELIMINA la clave API actual (la que está en rojo/bloqueada).</p>
+                        <p>3. Crea una NUEVA Clave de API.</p>
+                        <p>4. Haz clic en la nueva clave y busca "Restricciones de sitios web".</p>
+                        <p>5. Agrega: <code>localhost</code> y <code>*.run.app</code> (o tu dominio actual).</p>
+                        <p>6. Guarda la clave.</p>
+                        <p>7. En tu proyecto local, crea un archivo <code>.env</code> y pega: <br/><span className="text-amber-400">REACT_APP_FIREBASE_API_KEY=tu_clave_nueva_aqui</span></p>
+                    </div>
                 </div>
             )}
 
-            {/* ALERT: PERMISSIONS */}
+            {/* 2. PERMISSIONS (RULES) */}
             {!isCloudActive && dbError === 'permission' && (
-                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6">
-                     <h3 className="font-bold text-amber-500 flex items-center gap-2"><AlertTriangle size={18}/> Error de Permisos</h3>
-                     <p className="text-sm text-slate-300">Revisa las Reglas de Seguridad en Firebase Console.</p>
+                <div className="bg-blue-600/10 border border-blue-500/50 rounded-xl p-6 mb-6">
+                     <h3 className="text-xl font-bold text-blue-400 flex items-center gap-2 mb-3"><ShieldCheck size={24}/> ERROR: Acceso Denegado (Reglas)</h3>
+                     <p className="text-slate-300 mb-4">Tu base de datos funciona, pero las Reglas de Seguridad rechazan la conexión.</p>
+                     
+                     <div className="bg-black/50 p-4 rounded-lg border border-blue-500/30">
+                        <p className="text-sm text-slate-400 mb-2">Copia y pega esto exactamente en <a href="https://console.firebase.google.com/" target="_blank" className="text-blue-400 underline">Firebase Console &gt; Firestore &gt; Reglas</a>:</p>
+                        <pre className="text-xs text-emerald-400 font-mono bg-black p-3 rounded select-all border border-white/10">
+rules_version = '2';
+service cloud.firestore {'{'}
+  match /databases/{'{'}database{'}'}/documents {'{'}
+    match /{'{'}document=**{'}'} {'{'}
+      allow read, write: if true;
+    {'}'}
+  {'}'}
+{'}'}
+                        </pre>
+                        <p className="text-xs text-amber-500 mt-2">* Esto abre la DB para que la app funcione sin autenticación de Firebase Auth (usando tu auth personalizada).</p>
+                     </div>
+                </div>
+            )}
+
+             {/* 3. DB NOT FOUND */}
+             {!isCloudActive && dbError === 'missing_db' && (
+                <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-6 mb-6">
+                    <h3 className="text-xl font-bold text-amber-500 flex items-center gap-2 mb-3"><Database size={24}/> Base de Datos No Encontrada</h3>
+                    <p className="text-slate-300 mb-2">El sistema busca una DB llamada <strong>aiwis-bd-ia-portal</strong> pero no existe o está inhabilitada.</p>
+                    <div className="bg-black/30 p-3 rounded text-sm text-slate-400">
+                        Ve a Firebase Console &gt; Firestore Database. Asegúrate de que la base de datos (default) o la nombrada esté creada y activa.
+                    </div>
                 </div>
             )}
 
@@ -161,17 +204,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, modules, onUpdat
                         </h2>
                         <div className="flex items-center gap-2 text-slate-400 text-xs mt-1">
                             {isCloudActive ? (
-                                <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> DB: aiwis-bd-ia-portal</span>
+                                <span className="text-emerald-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> ONLINE: aiwis-bd-ia-portal</span>
                             ) : (
-                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> Offline</span>
+                                <span className="text-red-400 font-bold flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> OFFLINE ({dbError})</span>
                             )}
                         </div>
                     </div>
                     
-                    <div className="flex w-full md:w-auto bg-slate-950 p-1 rounded-lg border border-white/10 overflow-hidden">
-                        <button onClick={() => setActiveTab('users')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>Usuarios</button>
-                        <button onClick={() => setActiveTab('content')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'content' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Módulos & Clases</button>
-                        <button onClick={() => setActiveTab('database')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'database' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>DB Data</button>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <div className="flex flex-1 bg-slate-950 p-1 rounded-lg border border-white/10 overflow-hidden">
+                            <button onClick={() => setActiveTab('users')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>Usuarios</button>
+                            <button onClick={() => setActiveTab('content')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'content' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Módulos</button>
+                            <button onClick={() => setActiveTab('database')} className={`flex-1 px-3 py-2 text-xs md:text-sm font-medium rounded ${activeTab === 'database' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>DB</button>
+                        </div>
+                        <button onClick={handleRetry} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Recargar / Reintentar">
+                            <RefreshCw size={18} />
+                        </button>
                     </div>
                 </div>
 
