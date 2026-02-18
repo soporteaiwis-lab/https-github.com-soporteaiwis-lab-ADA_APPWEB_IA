@@ -2,12 +2,12 @@
 // Debes obtener estas credenciales en: https://console.firebase.google.com/
 // Crea un proyecto, agrega una "Web App" y copia la configuración aquí.
 export const FIREBASE_CONFIG = {
-  apiKey: "TU_API_KEY_AQUI", // Reemplazar con datos reales
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: "AIzaSyDN6bUA6X06VQCLsUskCobzjV9LP85hT1Q",
+  authDomain: "portal-ada-ia.firebaseapp.com",
+  projectId: "portal-ada-ia",
+  storageBucket: "portal-ada-ia.firebasestorage.app",
+  messagingSenderId: "96287198149",
+  appId: "1:96287198149:web:e85c201e8c44fdb38c19ac"
 };
 
 export const APP_CONFIG = {
